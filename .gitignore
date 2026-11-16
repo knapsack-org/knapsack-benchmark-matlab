@@ -1,0 +1,5 @@
+# benchmark results (keep the folder)
+output/*.json
+!output/.gitkeep
+octave-workspace
+*.asv
