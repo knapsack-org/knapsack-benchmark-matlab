@@ -97,5 +97,36 @@ function test_p01()
     assert(isequal(kb_chz_encode_slack(s, 17), kb_encode_slack(s, 17)), 'qubo_chz slack encoding');
   end
 
+  % greedy: feasible, at least half of the optimum
+  [items, info] = kp_algo_greedy_main(v, w, C);
+  assert(sum(w(items)) <= C && sum(v(items)) >= 309 / 2 && info.operations == 10, 'greedy on P01');
+
+  % FPTAS: value >= (1 - epsilon) * 309 for several epsilon, items feasible
+  for eps = [0.05 0.2 0.5 1]
+    items = kp_algo_fptas_main(v, w, C, struct('epsilon', eps));
+    assert(sum(w(items)) <= C && sum(v(items)) >= (1 - eps) * 309, 'fptas guarantee on P01');
+  end
+  items = kp_algo_fptas_main(v, w, C, struct('epsilon', 0.01));
+  assert(isequal(items, [1 2 3 4 6]), 'fptas with a tiny epsilon should be exact on P01');
+
+  % Ising model: H(sigma) = QUBO energy of z = (1 + sigma) / 2 (MathWorks example 1 data)
+  [Q, c, d] = kb_knapsack2qubo([5 2 8 4 3], [9 8 4 5 2], 17, 1);
+  [J, h, E0, K] = kb_ising_model([5 2 8 4 3], [9 8 4 5 2], 17, 1);
+  assert(K == 5 && isequal(J, J') && all(diag(J) == 0), 'ising model shape');
+  for t = 1:50
+    z = double(rand(10, 1) < 0.5);
+    s = 2 * z - 1;
+    assert(abs((0.5 * s' * J * s + h' * s + E0) - (z' * Q * z + c' * z + d)) < 1e-9, ...
+           'Ising energy differs from the QUBO energy');
+  end
+
+  % sa, ga, ising: reproducible for a given seed, feasible packing
+  for id = {'sa', 'ga', 'ising'}
+    f = str2func(['kp_algo_' id{1} '_main']);
+    a1 = f(v, w, C, cfg.(id{1}), 7);
+    a2 = f(v, w, C, cfg.(id{1}), 7);
+    assert(isequal(a1, a2) && sum(w(a1)) <= C, [id{1} ': not reproducible or infeasible']);
+  end
+
   disp('test_p01: all checks passed');
 end
