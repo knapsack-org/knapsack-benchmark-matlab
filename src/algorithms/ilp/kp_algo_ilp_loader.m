@@ -3,7 +3,10 @@ function L = kp_algo_ilp_loader()
 %   Available only when an ILP solver exists (intlinprog in MATLAB, glpk in Octave).
   L = struct();
   L.id = 'ilp';                         % must equal the folder name
-  L.label = 'integer linear programming';
+  L.label = 'Integer Linear Programming';
+  L.description = ['Exact integer linear program: maximise the packed value subject to the ' ...
+                   'capacity, with binary variables, solved by a MILP solver (glpk or ' ...
+                   'intlinprog in MATLAB, HiGHS in Python).'];
   L.short_label = 'ILP';                % algorithm chip in Knapview
   L.exact = true;
   L.reference = false;

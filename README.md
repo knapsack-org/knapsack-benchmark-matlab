@@ -87,7 +87,7 @@ Everything about an algorithm lives in `src/algorithms/<id>/` (`<id>` matches `[
 
 | File | Role |
 |---|---|
-| `kp_algo_<id>_loader.m` | `L.id` (= folder name), `label`, `short_label` (Knapview chip), `exact`, `reference` (exactly one algorithm, `dp`), `available()` (false → skipped with a warning), `environment()` (struct written to `environment.algorithms.<id>`) |
+| `kp_algo_<id>_loader.m` | `L.id` (= folder name), `label` (capitalised words, e.g. `Branch and Bound (Dantzig Bound, Depth-First)`), `description` (one or two sentences, written to its `algorithms[]` entry), `short_label` (Knapview chip), `exact`, `reference` (exactly one algorithm, `dp`), `available()` (false → skipped with a warning), `environment()` (struct written to `environment.algorithms.<id>`) |
 | `kp_algo_<id>_main.m` | the maths: `[items, info] = kp_algo_<id>_main(v, w, C, acfg, seed, mark)`; `mark('phase')` (optional) ends a timed phase |
 | `kp_algo_<id>_config.m` | settings block `cfg.<id>`, always with `repeats` |
 | `kp_algo_<id>_output.m` | `O.run(v, w, C, acfg, seed)` (calls `_main`, times its phases with `kb_phase_timer`, returns the common result), `O.entry(acfg, env)` (its `algorithms[]` entry) and `O.schema.entry` / `O.schema.details` (JSON Schema, checked on every run) |
@@ -157,10 +157,12 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
   "project": "knapsack-benchmark-matlab",
   "schema_version": 3,
   "algorithms": [
-    { "id": "bnb", "label": "branch and bound (Dantzig bound, depth-first)", "short_label": "BnB",
+    { "id": "bnb", "label": "Branch and Bound (Dantzig Bound, Depth-First)",
+      "description": "Exact depth-first search over take/skip decisions, ...", "short_label": "BnB",
       "exact": true, "reference": false, "config": { "max_nodes": 5000000, "repeats": 1 } },
-    { "id": "dp", "label": "dynamic programming 0-1", "short_label": "DP", "exact": true,
-      "reference": true, "config": { "repeats": 5 } },
+    { "id": "dp", "label": "Dynamic Programming 0-1",
+      "description": "Exact table of the best value for the first i items ...", "short_label": "DP",
+      "exact": true, "reference": true, "config": { "repeats": 5 } },
     "..."
   ],
   "skipped_algorithms": [],
@@ -178,7 +180,7 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
   "summary": {
     "num_instances": 100, "total_time_seconds": 0,
     "algorithms": {
-      "dp":   { "algorithm": "dynamic programming 0-1", "exact": true,
+      "dp":   { "algorithm": "Dynamic Programming 0-1", "exact": true,
                 "num_optimal": 100, "num_proven_optimal": 100, "num_feasible": 100,
                 "mean_gap_percent": 0, "max_gap_percent": 0,
                 "total_wall_time_s": 0, "mean_wall_time_s": 0, "median_wall_time_s": 0,
@@ -201,7 +203,7 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
     { "id": 1, "family": "uncorrelated", "n": 10, "capacity": 285,
       "weights": [], "values": [], "optimum": 345, "optimal_items": [],
       "results": {
-        "dp":  { "algorithm": "dynamic programming 0-1", "exact": true, "proven_optimal": true,
+        "dp":  { "algorithm": "Dynamic Programming 0-1", "exact": true, "proven_optimal": true,
                  "value": 345, "items": [], "weight": 0, "feasible": true,
                  "is_optimal": true, "gap_percent": 0,
                  "cost": { "repeats": 5, "wall_time_s": 0, "wall_time_min_s": 0, "cpu_time_s": 0,
@@ -218,7 +220,7 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
                                "raw_items": [], "raw_value": 345, "raw_weight": 0,
                                "feasible_before_repair": true, "repaired": false,
                                "build_time_s": 0, "solve_time_s": 0, "decode_time_s": 0 } },
-        "qubo_chz": { "algorithm": "QUBO CHZ + tabu search (slack-optimal)", "...": "same fields as qubo" }
+        "qubo_chz": { "algorithm": "QUBO CHZ + Tabu Search (slack-optimal)", "...": "same fields as qubo" }
       } }
   ]
 }
