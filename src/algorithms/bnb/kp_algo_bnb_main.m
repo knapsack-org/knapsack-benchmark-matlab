@@ -1,5 +1,8 @@
-function [best, items, info] = kb_knapsack_bnb(v, w, C, max_nodes)
-%KB_KNAPSACK_BNB  Exact 0-1 knapsack by depth-first branch and bound.
+function [items, info] = kp_algo_bnb_main(v, w, C, acfg, varargin)
+%KP_ALGO_BNB_MAIN  Exact 0-1 knapsack by depth-first branch and bound.
+%   [ITEMS, INFO] = KP_ALGO_BNB_MAIN(V, W, C, ACFG): ACFG.max_nodes is the node
+%   limit (default Inf when ACFG is omitted); seed and phase marks are accepted and
+%   not used.
 %   Items are sorted by value/weight ratio (decreasing). The search always
 %   tries "take item k" before "skip item k" and prunes a node when its
 %   Dantzig upper bound (LP relaxation: greedy fill + fraction of the critical
@@ -7,12 +10,15 @@ function [best, items, info] = kb_knapsack_bnb(v, w, C, max_nodes)
 %   solution found so far. The greedy solution is the initial lower bound.
 %   Iterative backtracking (no recursion), O(n) memory.
 %
-%   MAX_NODES (default Inf) stops the search early; INFO.proven_optimal is
-%   then false and BEST is the best solution found.
-%   INFO: nodes, proven_optimal, working_memory_bytes. ITEMS are 1-based.
+%   The node limit stops the search early; INFO.proven_optimal is then false
+%   and INFO.value is the best solution found.
+%   INFO: value, nodes, proven_optimal, working_memory_bytes. ITEMS are 1-based.
 
   if nargin < 4
     max_nodes = Inf;
+  else
+    max_nodes = acfg.max_nodes;
+    clear acfg                           % keep working_memory_bytes to the search's own data
   end
   v = v(:)';
   w = w(:)';
@@ -94,4 +100,5 @@ function [best, items, info] = kb_knapsack_bnb(v, w, C, max_nodes)
   info.proven_optimal = proven;
   vars = whos();
   info.working_memory_bytes = sum([vars.bytes]);
+  info.value = best;
 end

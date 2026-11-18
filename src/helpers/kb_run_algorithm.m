@@ -1,8 +1,11 @@
-function res = kb_run_algorithm(name, v, w, C, cfg, k, optimum)
+function res = kb_run_algorithm(algo, v, w, C, cfg, k)
 %KB_RUN_ALGORITHM  Run one algorithm with its timing repeats and build its result.
-  acfg = cfg.(name);
-  loader = algorithm_loader();
-  adapter = loader.adapter(name);
+%   RES = KB_RUN_ALGORITHM(ALGO, V, W, C, CFG, K): ALGO is one entry of
+%   KB_DISCOVER_ALGORITHMS; its adapter ALGO.output.run is timed CFG.(id).repeats
+%   times and its details are checked against ALGO.output.schema.details.
+%   RES.is_optimal and RES.gap_percent are filled by the caller once the
+%   reference optimum is known (placeholders false / NaN here).
+  acfg = cfg.(algo.id);
   seed = cfg.seed + 1000 * k;     % per-instance seed (used by the randomised algorithms)
   repeats = acfg.repeats;
   times = zeros(1, repeats);
@@ -10,11 +13,12 @@ function res = kb_run_algorithm(name, v, w, C, cfg, k, optimum)
   cpu0 = cputime();
   for rep = 1:repeats
     t = tic;
-    out = adapter(v, w, C, acfg, seed);
+    out = algo.output.run(v, w, C, acfg, seed);
     times(rep) = toc(t);
   end
   cpu = (cputime() - cpu0) / repeats;
   mem_after = kb_process_memory();
+  kb_validate_schema(out.details, algo.output.schema.details, [algo.id '.details']);
 
   items = out.items;
   res = struct();
@@ -25,12 +29,8 @@ function res = kb_run_algorithm(name, v, w, C, cfg, k, optimum)
   res.items = num2cell(items);
   res.weight = sum(w(items));
   res.feasible = res.weight <= C;
-  res.is_optimal = (res.value == optimum);
-  if optimum > 0
-    res.gap_percent = 100 * (optimum - res.value) / optimum;
-  else
-    res.gap_percent = 0;
-  end
+  res.is_optimal = false;
+  res.gap_percent = NaN;
 
   cost = struct();
   cost.repeats = repeats;

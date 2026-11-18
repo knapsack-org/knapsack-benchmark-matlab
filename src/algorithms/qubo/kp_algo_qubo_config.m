@@ -1,5 +1,5 @@
-function c = kb_config_qubo()
-%KB_CONFIG_QUBO  Default settings of 'qubo' (block cfg.qubo of BENCHMARK_CONFIG).
+function c = kp_algo_qubo_config()
+%KP_ALGO_QUBO_CONFIG  Settings of 'qubo' (block cfg.qubo of BENCHMARK_CONFIG).
   c = struct();
   c.penalty = 'auto';           % 'auto' = max(values) + 1, or a number
   tabu = struct();

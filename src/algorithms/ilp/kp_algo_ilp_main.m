@@ -1,9 +1,11 @@
-function [best, items, info] = kb_knapsack_ilp(v, w, C)
-%KB_KNAPSACK_ILP  Exact 0-1 knapsack as an integer linear program.
+function [items, info] = kp_algo_ilp_main(v, w, C, varargin)
+%KP_ALGO_ILP_MAIN  Exact 0-1 knapsack as an integer linear program.
+%   [ITEMS, INFO] = KP_ALGO_ILP_MAIN(V, W, C) (settings, seed and phase marks are accepted and not used;
+%   no ~ placeholders: Octave would add an ans variable to the whos memory count).
 %       max v'*x   s.t.  w'*x <= C,  x binary
 %   MATLAB with Optimization Toolbox -> intlinprog (HiGHS since R2024a);
 %   GNU Octave (or MATLAB without the toolbox but with glpk) -> glpk (GLPK).
-%   INFO: solver, status, proven_optimal, nodes (intlinprog only, else NaN),
+%   INFO: value, solver, status, proven_optimal, nodes (intlinprog only, else NaN),
 %   working_memory_bytes (problem data on the MATLAB side; the solver's
 %   internal memory is not visible).  ITEMS are 1-based.
 
@@ -33,7 +35,7 @@ function [best, items, info] = kb_knapsack_ilp(v, w, C)
     info.status = extra.status;
     info.proven_optimal = (errnum == 0 && extra.status == 5);   % 5 = optimal
   else
-    error('kb_knapsack_ilp:noSolver', ...
+    error('kp_algo_ilp_main:noSolver', ...
           'No ILP solver: needs intlinprog (MATLAB Optimization Toolbox) or glpk (GNU Octave).');
   end
 
@@ -42,4 +44,5 @@ function [best, items, info] = kb_knapsack_ilp(v, w, C)
   best = sum(v(take));
   vars = whos();
   info.working_memory_bytes = sum([vars.bytes]);
+  info.value = best;
 end

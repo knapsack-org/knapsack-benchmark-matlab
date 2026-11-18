@@ -4,14 +4,14 @@ Benchmark of five 0-1 knapsack algorithms, written in MATLAB-compatible code and
 
 | Key | Algorithm | Type | Implementation |
 |---|---|---|---|
-| `dp` | Dynamic programming 0-1 | exact (reference optimum) | `src/algorithms/dp/kb_knapsack_dp.m`, vectorised table, O(n·C) |
-| `bnb` | Branch and bound | exact | `src/algorithms/bnb/kb_knapsack_bnb.m`, depth-first, Dantzig (LP) bound, greedy start |
-| `ilp` | Integer linear programming | exact | `src/algorithms/ilp/kb_knapsack_ilp.m`: `glpk` in Octave, `intlinprog` in MATLAB (Optimization Toolbox) |
-| `qubo` | QUBO + tabu search | heuristic | `src/algorithms/qubo/kb_knapsack2qubo.m` + `kb_qubo_tabu_slack.m` |
-| `qubo_chz` | QUBO CHZ: independent copy of `qubo` | heuristic | `src/algorithms/qubo_chz/kb_chz_*.m`, own settings `cfg.qubo_chz` |
+| `bnb` | Branch and bound | exact | `src/algorithms/bnb/kp_algo_bnb_main.m`, depth-first, Dantzig (LP) bound, greedy start |
+| `dp` | Dynamic programming 0-1 | exact (reference optimum) | `src/algorithms/dp/kp_algo_dp_main.m`, vectorised table, O(n·C) |
+| `ilp` | Integer linear programming | exact | `src/algorithms/ilp/kp_algo_ilp_main.m`: `glpk` in Octave, `intlinprog` in MATLAB (Optimization Toolbox) |
+| `qubo` | QUBO + tabu search | heuristic | `src/algorithms/qubo/kp_algo_qubo_main.m` (modules `kb_knapsack2qubo.m`, `kb_qubo_tabu_slack.m`, …) |
+| `qubo_chz` | QUBO CHZ: independent copy of `qubo` | heuristic | `src/algorithms/qubo_chz/`, own modules `kb_chz_*.m` and settings `cfg.qubo_chz` |
 
-For each of **100 generated instances** every algorithm is run and measured on:
-- **quality**: value, items, feasibility, gap to the DP optimum, proven optimality;
+The algorithms are found by scanning `src/algorithms/` (one folder per algorithm, see [Adding an algorithm](#adding-an-algorithm)); they run in alphabetical order. For each of **100 generated instances** every algorithm is run and measured on:
+- **quality**: value, items, feasibility, gap to the optimum of the reference algorithm (`dp`), proven optimality;
 - **execution cost**: wall time, CPU time, working memory, process memory, operations.
 
 Everything is written to `./output/run-dd-mm-yy-hh-mm.json`.
@@ -31,19 +31,9 @@ octave-cli --eval "run_benchmark"
 
 or in the Octave GUI: `cd` to this folder, then `run_benchmark`. A full run takes about 3 minutes (most of it is the two QUBO tabu searches).
 
-Options (any field of `benchmark_config.m`):
+There are no options: every run uses every algorithm on every instance. To change a setting, edit the file that defines it: `benchmark_config.m` (master seed), `src/instances/kb_config_instances.m` (number and size of instances) or `src/algorithms/<id>/kp_algo_<id>_config.m` (settings of one algorithm, e.g. `bnb.max_nodes`, `qubo.tabu.mode`, `qubo_chz.seed_offset`).
 
-```octave
-run_benchmark(struct('instances', struct('count', 10)))
-run_benchmark(struct('algorithms', {{'dp', 'bnb', 'ilp'}}))   % subset (note the double braces)
-run_benchmark(struct('bnb', struct('max_nodes', 1e5)))          % cap branch and bound
-run_benchmark(struct('bnb', struct('repeats', 3)))              % more timing repeats
-run_benchmark(struct('qubo', struct('tabu', struct('mode', 'all-bits'))))   % plain bit-flip tabu for QUBO
-run_benchmark(struct('qubo_chz', struct('tabu', struct('restarts', 50))))   % tune qubo_chz only
-run_benchmark(struct('qubo_chz', struct('seed_offset', 7)))     % other random starts for qubo_chz
-```
-
-Tests (reference instance P01 = 309 for DP, B&B and ILP; MathWorks `knapsack2qubo` example; QUBO solvers; slack encoding; `qubo_chz` identical to `qubo`):
+Tests (every discovered algorithm on P01 through its adapter, with its JSON Schema; P01 = 309 for DP, B&B and ILP; MathWorks `knapsack2qubo` example; QUBO solvers; slack encoding; `qubo_chz` identical to `qubo`):
 
 ```
 octave-cli --eval "addpath('tests'); test_p01"
@@ -53,15 +43,16 @@ octave-cli --eval "addpath('tests'); test_p01"
 
 ```
 knapsack-benchmark-matlab/
-├── run_benchmark.m            entry point: generate → run each algorithm (timed) → compare → JSON
-├── benchmark_config.m         all parameters (seed, sizes, algorithms, limits, tabu, timing)
+├── run_benchmark.m            entry point, no argument: discover → generate → run each algorithm (timed) → compare → JSON
+├── benchmark_config.m         master seed + settings collected from src/instances and src/algorithms/<id>
 ├── src/                       added to the path with genpath (all subfolders)
-│   ├── helpers/
-│   │   ├── kb_ilp_solver_name.m     intlinprog / glpk / none
+│   ├── helpers/               generic code, no algorithm names
+│   │   ├── kb_discover_algorithms.m  scan src/algorithms/, check the folder contract, reference, availability
 │   │   ├── kb_run_algorithm.m       run one algorithm with its timing repeats → result + cost
-│   │   ├── kb_add_ratios_vs_dp.m    cost ratios to dp
+│   │   ├── kb_validate_schema.m     JSON Schema subset check of the algorithms' output
+│   │   ├── kb_phase_timer.m         phase timer passed to kp_algo_<id>_main as MARK
+│   │   ├── kb_add_ratios.m          cost ratios to the reference algorithm
 │   │   ├── kb_summary.m             per-algorithm / per-family summary
-│   │   ├── kb_penalty.m             QUBO penalty rule (shared by qubo and qubo_chz)
 │   │   ├── kb_print_instance.m, kb_print_summary.m, kb_human_bytes.m   console output
 │   │   ├── kb_interpreter.m         'GNU Octave' or 'MATLAB'
 │   │   ├── kb_lcg.m, kb_randi.m, kb_seed.m   portable random numbers (same in MATLAB, Octave, Python)
@@ -71,22 +62,38 @@ knapsack-benchmark-matlab/
 │   ├── instances/
 │   │   ├── kb_generate_instances.m  100 reproducible instances (Pisinger families)
 │   │   └── kb_config_instances.m    generator settings (block cfg.instances)
-│   └── algorithms/            each folder also holds kb_config_<id>.m (settings) and kb_algo_<id>.m (adapter)
-│       ├── algorithm_loader.m   registry of algorithm ids (add new algorithms here), default settings, id check, adapter lookup
-│       ├── dp/kb_knapsack_dp.m      dynamic programming 0-1 (exact)
-│       ├── bnb/kb_knapsack_bnb.m    branch and bound (exact)
-│       ├── ilp/kb_knapsack_ilp.m    integer linear programming via glpk / intlinprog (exact)
-│       ├── qubo/
-│       │   ├── kb_knapsack2qubo.m       knapsack → QUBO (Q, c, d), binary-encoded slack
-│       │   ├── kb_qubo_tabu_slack.m     tabu search, item bits flipped, slack bits set optimally (default)
-│       │   ├── kb_qubo_tabu.m           plain single-bit-flip tabu search on all QUBO bits
-│       │   ├── kb_encode_slack.m        slack value → slack bits
-│       │   └── kb_decode.m              QUBO vector → items / value / weight (+ repair)
-│       └── qubo_chz/kb_chz_*.m      independent copies of the five QUBO files,
-│                                    to be modified without touching qubo
+│   └── algorithms/            one self-contained folder per algorithm (only folders here)
+│       ├── bnb/                     branch and bound (exact): kp_algo_bnb_{loader,main,config,output}.m
+│       ├── dp/                      dynamic programming 0-1 (exact, reference): kp_algo_dp_*.m
+│       ├── ilp/                     integer linear programming via glpk / intlinprog (exact)
+│       │   └── modules/kb_ilp_solver_name.m   intlinprog / glpk / none (loader availability)
+│       ├── qubo/                    kp_algo_qubo_*.m
+│       │   └── modules/
+│       │       ├── kb_penalty.m             penalty rule 'auto' = max(v) + 1
+│       │       ├── kb_knapsack2qubo.m       knapsack → QUBO (Q, c, d), binary-encoded slack
+│       │       ├── kb_qubo_tabu_slack.m     tabu search, item bits flipped, slack bits set optimally (default)
+│       │       ├── kb_qubo_tabu.m           plain single-bit-flip tabu search on all QUBO bits
+│       │       ├── kb_encode_slack.m        slack value → slack bits
+│       │       └── kb_decode.m              QUBO vector → items / value / weight (+ repair)
+│       └── qubo_chz/                kp_algo_qubo_chz_*.m + modules/kb_chz_*.m: independent copies
+│                                    of the six QUBO modules, to be modified without touching qubo
 ├── tests/test_p01.m
 └── output/                    run-dd-mm-yy-hh-mm.json files (git-ignored)
 ```
+
+## Adding an algorithm
+
+Everything about an algorithm lives in `src/algorithms/<id>/` (`<id>` matches `[a-z][a-z0-9_]*`); nothing else is edited. Copy the folder of a similar algorithm, rename its files, and adapt:
+
+| File | Role |
+|---|---|
+| `kp_algo_<id>_loader.m` | `L.id` (= folder name), `label`, `short_label` (Knapview chip), `exact`, `reference` (exactly one algorithm, `dp`), `available()` (false → skipped with a warning), `environment()` (struct written to `environment.algorithms.<id>`) |
+| `kp_algo_<id>_main.m` | the maths: `[items, info] = kp_algo_<id>_main(v, w, C, acfg, seed, mark)`; `mark('phase')` (optional) ends a timed phase |
+| `kp_algo_<id>_config.m` | settings block `cfg.<id>`, always with `repeats` |
+| `kp_algo_<id>_output.m` | `O.run(v, w, C, acfg, seed)` (calls `_main`, times its phases with `kb_phase_timer`, returns the common result), `O.entry(acfg, env)` (its `algorithms[]` entry) and `O.schema.entry` / `O.schema.details` (JSON Schema, checked on every run) |
+| `modules/` | helper functions of `_main` (optional) |
+
+`.m` file names must be unique across all algorithm folders (they share one path); `kb_discover_algorithms` stops with an error otherwise. Algorithms may call `src/helpers/` but never another algorithm's folder: shared code is copied (e.g. `kb_penalty.m` / `kb_chz_penalty.m`). See also `documentation/implementation/adding-an-algorithm.md`.
 
 ## Method
 
@@ -100,7 +107,7 @@ knapsack-benchmark-matlab/
 
 **QUBO.** Minimise f(x, s) = −Σ vᵢxᵢ + P · (Σ wᵢxᵢ + s − C)², slack s on ⌈log₂(C+1)⌉ bits; P = max(v) + 1 (then the QUBO minimum is the knapsack optimum). Same model as MATLAB's `knapsack2qubo`. Solved by a multi-start tabu search (20 restarts, tenure 10 + n/10, aspiration) that flips item bits and sets the slack bits to their optimal value (every visited point is a valid QUBO assignment; the energy is recomputed from Q, c, d). The `all-bits` mode is the textbook single-bit-flip version, kept for comparison.
 
-**QUBO CHZ (`qubo_chz`).** An independent replica of the QUBO pipeline: its own five source files (`src/algorithms/qubo_chz/kb_chz_*.m`) and its own settings block `cfg.qubo_chz` (`penalty`, `seed_offset`, `tabu`). It shares only the infrastructure (random generator, memory helper, JSON writer). When created it is identical to `qubo`: same model, solver and random starts (`seed_offset = 0`), so it gives the same solutions; only its timings differ slightly. Change its files or settings to experiment without affecting `qubo`.
+**QUBO CHZ (`qubo_chz`).** An independent replica of the QUBO pipeline: its own six modules (`src/algorithms/qubo_chz/modules/kb_chz_*.m`) and its own settings block `cfg.qubo_chz` (`penalty`, `seed_offset`, `tabu`). It shares only the infrastructure (random generator, memory helper, JSON writer). When created it is identical to `qubo`: same model, solver and random starts (`seed_offset = 0`), so it gives the same solutions; only its timings differ slightly. Change its files or settings to experiment without affecting `qubo`.
 
 ## Execution cost measures
 
@@ -108,13 +115,13 @@ Each algorithm result has a `cost` object:
 
 | Field | Meaning |
 |---|---|
-| `wall_time_s` / `wall_time_min_s` | median / fastest wall-clock time over the repeats (`tic`/`toc`). Repeats: dp 5, bnb 1, ilp 3, qubo 1 (`timing.repeats_*`) |
+| `wall_time_s` / `wall_time_min_s` | median / fastest wall-clock time over the repeats (`tic`/`toc`). Repeats: dp 5, bnb 1, ilp 3, qubo and qubo_chz 1 (`repeats` in `kp_algo_<id>_config.m`) |
 | `cpu_time_s` | CPU time per run (`cputime`) |
 | `working_memory_bytes` | bytes held by the algorithm's own arrays (`whos` at the end of the function): DP table; B&B vectors; ILP problem data (the solver's internal memory is not visible); QUBO Q, c and search vectors |
 | `process_memory_before/after/delta_bytes` | process RAM from `memory()` (Octave on Linux and Windows; MATLAB on Windows only), `null` when unavailable. Process-wide snapshot: indicative only |
 | `operations` + `operations_unit` | dp: table cells n·(C+1) · bnb: nodes · ilp: B&B nodes (`intlinprog` only, `null` with glpk) · qubo, qubo_chz: move evaluations |
 
-and a `cost_ratio_vs_dp` object (`time`, `cpu`, `memory`; > 1 means costlier than DP).
+and a `cost_ratio_vs_reference` object (`time`, `cpu`, `memory`; > 1 means costlier than the reference algorithm `dp`).
 
 ## Expected results (default settings, seed 2026, 100 instances)
 
@@ -143,25 +150,28 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
 
 ## Output file
 
-`output/run-dd-mm-yy-hh-mm.json` (day-month-year-hour-minute of the run). `schema_version` identifies the JSON structure (currently 2, same value in the Python project); increase it on any breaking change:
+`output/run-dd-mm-yy-hh-mm.json` (day-month-year-hour-minute of the run). `schema_version` identifies the JSON structure (currently 3, same value in the Python project); increase it on any breaking change:
 
 ```json
 {
   "project": "knapsack-benchmark-matlab",
-  "schema_version": 2,
+  "schema_version": 3,
   "algorithms": [
-    { "id": "dp", "label": "dynamic programming 0-1", "exact": true, "config": { "repeats": 5 } },
-    { "id": "bnb", "label": "branch and bound (Dantzig bound, depth-first)", "exact": true,
-      "config": { "max_nodes": 5000000, "repeats": 1 } },
+    { "id": "bnb", "label": "branch and bound (Dantzig bound, depth-first)", "short_label": "BnB",
+      "exact": true, "reference": false, "config": { "max_nodes": 5000000, "repeats": 1 } },
+    { "id": "dp", "label": "dynamic programming 0-1", "short_label": "DP", "exact": true,
+      "reference": true, "config": { "repeats": 5 } },
     "..."
   ],
+  "skipped_algorithms": [],
   "instance_config": { "seed": 2026, "count": 100, "min_items": 10, "max_items": 48,
                        "max_coefficient": 100, "capacity_ratio": 0.5 },
   "reference_algorithm": "dp",
   "created": "2026-11-14T13:40:00",
   "environment": { "interpreter": "GNU Octave", "version": "11.3.0", "computer": "...",
-                   "process_memory_available": true, "ilp_solver": "glpk" },
-  "parameters": { "seed": 2026, "instances": { "count": 100, "...": "..." }, "algorithms": ["dp", "bnb", "ilp", "qubo", "qubo_chz"],
+                   "process_memory_available": true,
+                   "algorithms": { "ilp": { "solver": "glpk" } } },
+  "parameters": { "seed": 2026, "instances": { "count": 100, "...": "..." }, "algorithms": ["bnb", "dp", "ilp", "qubo", "qubo_chz"],
                   "dp": { "repeats": 5 }, "bnb": { "max_nodes": 5000000, "repeats": 1 },
                   "ilp": { "repeats": 3 }, "qubo": { "penalty": "auto", "tabu": { "...": "..." }, "repeats": 1 },
                   "qubo_chz": { "penalty": "auto", "seed_offset": 0, "tabu": { "...": "..." }, "repeats": 1 } },
@@ -176,7 +186,7 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
                 "mean_working_memory_bytes": 0, "median_working_memory_bytes": 0,
                 "max_working_memory_bytes": 0, "mean_operations": 0, "max_operations": 0,
                 "operations_unit": "table cells",
-                "median_time_ratio_vs_dp": 1, "median_memory_ratio_vs_dp": 1,
+                "median_time_ratio_vs_reference": 1, "median_memory_ratio_vs_reference": 1,
                 "by_family": [ { "family": "strongly_correlated", "count": 33, "num_optimal": 33,
                                  "mean_gap_percent": 0, "mean_wall_time_s": 0,
                                  "max_wall_time_s": 0, "mean_working_memory_bytes": 0 } ] },
@@ -199,7 +209,7 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
                            "process_memory_after_bytes": 0, "process_memory_delta_bytes": 0,
                            "operations": 0, "operations_unit": "table cells" },
                  "details": { "table_cells": 0 },
-                 "cost_ratio_vs_dp": { "time": 1, "cpu": 1, "memory": 1 } },
+                 "cost_ratio_vs_reference": { "time": 1, "cpu": 1, "memory": 1 } },
         "bnb": { "...": "...", "details": { "nodes": 0, "node_limit": 5000000, "node_limit_reached": false } },
         "ilp": { "...": "...", "details": { "solver": "glpk", "status": 5 } },
         "qubo": { "...": "...",
@@ -214,9 +224,9 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
 }
 ```
 
-Item indices are 1-based. `gap_percent` = 100 · (optimum − value) / optimum, with the DP optimum as reference.
+Item indices are 1-based. `gap_percent` = 100 · (optimum − value) / optimum, with the optimum of the reference algorithm (`dp`). Algorithms and results are in alphabetical order of their ids.
 
 ## Notes
 
-- MATLAB's `knapsack2qubo` / `solve` (Quantum Computing support package) are not used: they do not exist in Octave. `kb_knapsack2qubo` reproduces the same model (checked against the MathWorks example: 10 variables, constant 289, energy −16).
+- MATLAB's `knapsack2qubo` / `solve` (Quantum Computing support package) are not used: they do not exist in Octave. `kb_knapsack2qubo` (qubo module) reproduces the same model (checked against the MathWorks example: 10 variables, constant 289, energy −16).
 - Documentation: knapsack Obsidian vault, `docs/shared/knapsack-problem/theory.*`, `docs/matlab/libraries/*` and `docs/python/libraries/*`.
