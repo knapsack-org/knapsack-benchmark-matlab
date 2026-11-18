@@ -7,22 +7,24 @@ function cfg = benchmark_config(overrides)
 %   only changes qubo_chz.tabu.restarts.
 %
 %   Each algorithm has its own settings block cfg.<id>, whose defaults come from
-%   src/algorithms/<id>/kb_config_<id>.m (ids listed in KB_ALGORITHM_IDS); the
+%   src/algorithms/<id>/kb_config_<id>.m (ids listed in ALGORITHM_LOADER); the
 %   instance generator's block cfg.instances comes from src/instances/kb_config_instances.m.
 
   addpath(genpath(fullfile(fileparts(mfilename('fullpath')), 'src')));
   cfg = struct();
   cfg.seed = 2026;              % master seed: same seed -> same instances and results
   cfg.instances = kb_config_instances();   % instance generator: src/instances/kb_config_instances.m
-  ids = kb_algorithm_ids();
+  loader = algorithm_loader();
+  ids = loader.ids;
   cfg.algorithms = ids;         % benchmarked, in this order (dp = reference)
                                 % dp        dynamic programming 0-1 (exact)
                                 % bnb       branch and bound (exact)
                                 % ilp       integer linear programming: intlinprog or glpk (exact)
                                 % qubo      QUBO + tabu search (heuristic)
                                 % qubo_chz  independent copy of qubo (own code and settings)
-  for i = 1:numel(ids)          % settings blocks cfg.dp, cfg.bnb, ... (each has 'repeats')
-    cfg.(ids{i}) = feval(['kb_config_' ids{i}]);
+  blocks = loader.configs();    % settings blocks cfg.dp, cfg.bnb, ... (each has 'repeats')
+  for i = 1:numel(ids)
+    cfg.(ids{i}) = blocks.(ids{i});
   end
 
   if nargin < 1 || isempty(overrides)

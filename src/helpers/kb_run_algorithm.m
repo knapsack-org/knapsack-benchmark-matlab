@@ -1,7 +1,8 @@
 function res = kb_run_algorithm(name, v, w, C, cfg, k, optimum)
 %KB_RUN_ALGORITHM  Run one algorithm with its timing repeats and build its result.
   acfg = cfg.(name);
-  adapter = str2func(['kb_algo_' name]);
+  loader = algorithm_loader();
+  adapter = loader.adapter(name);
   seed = cfg.seed + 1000 * k;     % per-instance seed (used by the randomised algorithms)
   repeats = acfg.repeats;
   times = zeros(1, repeats);

@@ -57,8 +57,6 @@ knapsack-benchmark-matlab/
 ├── benchmark_config.m         all parameters (seed, sizes, algorithms, limits, tabu, timing)
 ├── src/                       added to the path with genpath (all subfolders)
 │   ├── helpers/
-│   │   ├── kb_algorithm_ids.m       registry of algorithm ids (add new algorithms here)
-│   │   ├── kb_check_algorithms.m    validate the requested algorithm ids
 │   │   ├── kb_ilp_solver_name.m     intlinprog / glpk / none
 │   │   ├── kb_run_algorithm.m       run one algorithm with its timing repeats → result + cost
 │   │   ├── kb_add_ratios_vs_dp.m    cost ratios to dp
@@ -74,6 +72,7 @@ knapsack-benchmark-matlab/
 │   │   ├── kb_generate_instances.m  100 reproducible instances (Pisinger families)
 │   │   └── kb_config_instances.m    generator settings (block cfg.instances)
 │   └── algorithms/            each folder also holds kb_config_<id>.m (settings) and kb_algo_<id>.m (adapter)
+│       ├── algorithm_loader.m   registry of algorithm ids (add new algorithms here), default settings, id check, adapter lookup
 │       ├── dp/kb_knapsack_dp.m      dynamic programming 0-1 (exact)
 │       ├── bnb/kb_knapsack_bnb.m    branch and bound (exact)
 │       ├── ilp/kb_knapsack_ilp.m    integer linear programming via glpk / intlinprog (exact)

@@ -41,7 +41,8 @@ function result = run_benchmark(opts)
     opts = struct();
   end
   cfg = benchmark_config(opts);
-  algos = kb_check_algorithms(cfg.algorithms);
+  loader = algorithm_loader();
+  algos = loader.check(cfg.algorithms);
 
   ic = cfg.instances;
   instances = kb_generate_instances(ic.count, cfg.seed, ic.min_items, ic.max_items, ...
