@@ -2,8 +2,8 @@ function O = kp_algo_greedy_output()
 %KP_ALGO_GREEDY_OUTPUT  Benchmark adapter and JSON description of 'greedy'.
 %   O.run(v, w, C, acfg, seed)  runs KP_ALGO_GREEDY_MAIN, returns the common result struct
 %   O.entry(acfg, env)          entry of the JSON "algorithms" array
-%   O.schema.entry / .details   JSON Schema of that entry / of results.greedy.details
-  O = struct('run', @run_algo, 'entry', @build_entry, 'schema', describe());
+%   JSON Schema of both: kp_algo_greedy_output.schema.json (next to this file)
+  O = struct('run', @run_algo, 'entry', @build_entry);
 end
 
 function out = run_algo(v, w, C, acfg, seed)
@@ -24,18 +24,4 @@ end
 function s = label()
   L = kp_algo_greedy_loader();
   s = L.label;
-end
-
-function s = describe()
-  s.entry = jsondecode(['{"type": "object", "additionalProperties": false,' ...
-    ' "required": ["id", "label", "description", "short_label", "exact", "reference", "config"],' ...
-    ' "properties": {"id": {"enum": ["greedy"]}, "label": {"type": "string"}, "description": {"type": "string"},' ...
-    ' "short_label": {"type": "string"}, "exact": {"type": "boolean"},' ...
-    ' "reference": {"type": "boolean"},' ...
-    ' "config": {"type": "object", "additionalProperties": false, "required": ["repeats"],' ...
-    '   "properties": {"repeats": {"type": "integer", "minimum": 1}}}}}']);
-  s.details = jsondecode(['{"type": "object", "additionalProperties": false,' ...
-    ' "required": ["greedy_value", "single_value", "chose_single"],' ...
-    ' "properties": {"greedy_value": {"type": "number", "minimum": 0},' ...
-    '   "single_value": {"type": "number", "minimum": 0}, "chose_single": {"type": "boolean"}}}']);
 end
