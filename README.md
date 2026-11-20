@@ -1,6 +1,6 @@
 # knapsack-benchmark-matlab
 
-Benchmark of five 0-1 knapsack algorithms, written in MATLAB-compatible code and run with **GNU Octave** (free). It also runs unchanged in MATLAB.
+Benchmark of ten 0-1 knapsack algorithms (`bnb`, `dp`, `fptas`, `ga`, `greedy`, `ilp`, `ising`, `qubo`, `qubo_chz`, `sa`; the table lists the first five), written in MATLAB-compatible code and run with **GNU Octave** (free). It also runs unchanged in MATLAB.
 
 | Key | Algorithm | Type | Implementation |
 |---|---|---|---|
@@ -14,7 +14,7 @@ The algorithms are found by scanning `src/algorithms/` (one folder per algorithm
 - **quality**: value, items, feasibility, gap to the optimum of the reference algorithm (`dp`), proven optimality;
 - **execution cost**: wall time, CPU time, working memory, process memory, operations.
 
-Everything is written to `./output/run-dd-mm-yy-hh-mm.json`.
+The raw results go to `./output/run-dd-mm-yy-hh-mm/raw.json` (with `instances.json`); the run file (`schema_version` 4: optimum, gaps, ratios, summary) is built from them by `knapsack-output` in [knapsack-server](https://github.com/knapsack-org/knapsack-server) (ADR 0014).
 
 ## Requirements
 
@@ -26,14 +26,24 @@ Everything is written to `./output/run-dd-mm-yy-hh-mm.json`.
 From a terminal, in this folder:
 
 ```
-octave-cli --eval "run_benchmark"
+octave-cli --eval "run_benchmark"                                            % defaults
+octave-cli --eval "run_benchmark('req.json', 'instances.json', 'out');"     % each argument optional ('' = absent)
+octave-cli --eval "run_benchmark('--describe');"                           % algorithms, default settings, JSON Schemas
 ```
 
-or in the Octave GUI: `cd` to this folder, then `run_benchmark`. A full run takes about 3 minutes (most of it is the two QUBO tabu searches).
+or in the Octave GUI: `cd` to this folder, then `run_benchmark`.
 
-There are no options: every run uses every algorithm on every instance. To change a setting, edit the file that defines it: `benchmark_config.m` (master seed), `src/instances/kb_config_instances.m` (number and size of instances) or `src/algorithms/<id>/kp_algo_<id>_config.m` (settings of one algorithm, e.g. `bnb.max_nodes`, `qubo.tabu.mode`, `qubo_chz.seed_offset`).
+| Argument | Meaning |
+|---|---|
+| request file | run request JSON (knapsack-server `RunRequest`): `seed`, `instances` (`count`, `min_items`, `max_items`, `max_coefficient`, `capacity_ratio`), `algorithms` (ids; the reference `dp` is always added), `algorithm_config` (`{<id>: partial settings}`, merged into the defaults; an unknown field is an error). Absent fields come from the settings files; `environments` is ignored |
+| instances file | instance set JSON (`format: "knapsack-instances"`, the `instances.json` of an earlier run or a knapsack-server shard) used instead of the generator; the per-instance seed stays `seed + 1000 * id` with the file's global ids |
+| out dir | output folder (default `output/run-dd-mm-yy-hh-mm/`) |
 
-Tests (every discovered algorithm on P01 through its adapter, with its JSON Schema; P01 = 309 for DP, B&B and ILP; MathWorks `knapsack2qubo` example; QUBO solvers; slack encoding; `qubo_chz` identical to `qubo`):
+Output: `raw.json` (`format: "knapsack-raw"`, `format_version` 1: algorithm entries and schemas, parameters, raw results per instance without `is_optimal`, `gap_percent`, `cost_ratio_vs_reference`) and, without an instances file, `instances.json`. stdout has one line per instance plus progress lines `@@progress {"instance":<id>,"algorithm":"<id>","event":"start"|"done"}` before and after each algorithm. A full run file: `pnpm -C <knapsack-server> knapsack-output <out dir>`.
+
+The settings files: `benchmark_config.m` (master seed), `src/instances/kb_config_instances.m` (number and size of instances) and `src/algorithms/<id>/kp_algo_<id>_config.m` (settings of one algorithm, e.g. `bnb.max_nodes`, `qubo.tabu.mode`, `qubo_chz.seed_offset`).
+
+Tests (every discovered algorithm on P01 through its adapter, keys checked against its schema file; `--describe`; request, instances file and shard (global seeds) round trip; P01 = 309 for DP, B&B and ILP; MathWorks `knapsack2qubo` example; QUBO solvers; slack encoding; `qubo_chz` identical to `qubo`):
 
 ```
 octave-cli --eval "addpath('tests'); test_p01"
@@ -43,17 +53,16 @@ octave-cli --eval "addpath('tests'); test_p01"
 
 ```
 knapsack-benchmark-matlab/
-├── run_benchmark.m            entry point, no argument: discover → generate → run each algorithm (timed) → compare → JSON
-├── benchmark_config.m         master seed + settings collected from src/instances and src/algorithms/<id>
+├── run_benchmark.m            entry point: discover → generate or read instances → run each algorithm (timed) → raw.json
+├── benchmark_config.m         master seed + settings collected from src/instances and src/algorithms/<id>, request overrides
 ├── src/                       added to the path with genpath (all subfolders)
 │   ├── helpers/               generic code, no algorithm names
-│   │   ├── kb_discover_algorithms.m  scan src/algorithms/, check the folder contract, reference, availability
-│   │   ├── kb_run_algorithm.m       run one algorithm with its timing repeats → result + cost
-│   │   ├── kb_validate_schema.m     JSON Schema subset check of the algorithms' output
+│   │   ├── kb_discover_algorithms.m  scan src/algorithms/, check the folder contract, reference, availability, request filter
+│   │   ├── kb_run_algorithm.m       run one algorithm with its timing repeats → raw result + cost
+│   │   ├── kb_merge_settings.m      request settings merged into the defaults
 │   │   ├── kb_phase_timer.m         phase timer passed to kp_algo_<id>_main as MARK
-│   │   ├── kb_add_ratios.m          cost ratios to the reference algorithm
-│   │   ├── kb_summary.m             per-algorithm / per-family summary
-│   │   ├── kb_print_instance.m, kb_print_summary.m, kb_human_bytes.m   console output
+│   │   ├── kb_write_json.m          JSON output (schema files inserted verbatim)
+│   │   ├── kb_print_instance.m, kb_print_progress.m   console output, progress lines
 │   │   ├── kb_interpreter.m         'GNU Octave' or 'MATLAB'
 │   │   ├── kb_lcg.m, kb_randi.m, kb_seed.m   portable random numbers (same in MATLAB, Octave, Python)
 │   │   ├── kb_bytes.m               working memory of arrays (whos)
@@ -78,7 +87,7 @@ knapsack-benchmark-matlab/
 │       └── qubo_chz/                kp_algo_qubo_chz_*.m + modules/kb_chz_*.m: independent copies
 │                                    of the six QUBO modules, to be modified without touching qubo
 ├── tests/test_p01.m
-└── output/                    run-dd-mm-yy-hh-mm.json files (git-ignored)
+└── output/                    run-dd-mm-yy-hh-mm/ folders (git-ignored)
 ```
 
 ## Adding an algorithm
@@ -90,7 +99,8 @@ Everything about an algorithm lives in `src/algorithms/<id>/` (`<id>` matches `[
 | `kp_algo_<id>_loader.m` | `L.id` (= folder name), `label` (capitalised words, e.g. `Branch and Bound (Dantzig Bound, Depth-First)`), `description` (one or two sentences, written to its `algorithms[]` entry), `short_label` (Knapview chip), `exact`, `reference` (exactly one algorithm, `dp`), `available()` (false → skipped with a warning), `environment()` (struct written to `environment.algorithms.<id>`) |
 | `kp_algo_<id>_main.m` | the maths: `[items, info] = kp_algo_<id>_main(v, w, C, acfg, seed, mark)`; `mark('phase')` (optional) ends a timed phase |
 | `kp_algo_<id>_config.m` | settings block `cfg.<id>`, always with `repeats` |
-| `kp_algo_<id>_output.m` | `O.run(v, w, C, acfg, seed)` (calls `_main`, times its phases with `kb_phase_timer`, returns the common result), `O.entry(acfg, env)` (its `algorithms[]` entry) and `O.schema.entry` / `O.schema.details` (JSON Schema, checked on every run) |
+| `kp_algo_<id>_output.m` | `O.run(v, w, C, acfg, seed)` (calls `_main`, times its phases with `kb_phase_timer`, returns the common result) and `O.entry(acfg, env)` (its `algorithms[]` entry) |
+| `kp_algo_<id>_output.schema.json` | JSON Schema 2020-12 of its `entry` (with `config` as an object), `config` and `details`; byte-identical to the Python file (knapsack-server `scripts/check-schemas.mjs`), checked by knapsack-server's output formatter |
 | `modules/` | helper functions of `_main` (optional) |
 
 `.m` file names must be unique across all algorithm folders (they share one path); `kb_discover_algorithms` stops with an error otherwise. Algorithms may call `src/helpers/` but never another algorithm's folder: shared code is copied (e.g. `kb_penalty.m` / `kb_chz_penalty.m`). See also `documentation/implementation/adding-an-algorithm.md`.
@@ -150,83 +160,7 @@ Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `q
 
 ## Output file
 
-`output/run-dd-mm-yy-hh-mm.json` (day-month-year-hour-minute of the run). `schema_version` identifies the JSON structure (currently 3, same value in the Python project); increase it on any breaking change:
-
-```json
-{
-  "project": "knapsack-benchmark-matlab",
-  "schema_version": 3,
-  "algorithms": [
-    { "id": "bnb", "label": "Branch and Bound (Dantzig Bound, Depth-First)",
-      "description": "Exact depth-first search over take/skip decisions, ...", "short_label": "BnB",
-      "exact": true, "reference": false, "config": { "max_nodes": 5000000, "repeats": 1 } },
-    { "id": "dp", "label": "Dynamic Programming 0-1",
-      "description": "Exact table of the best value for the first i items ...", "short_label": "DP",
-      "exact": true, "reference": true, "config": { "repeats": 5 } },
-    "..."
-  ],
-  "skipped_algorithms": [],
-  "instance_config": { "seed": 2026, "count": 100, "min_items": 10, "max_items": 48,
-                       "max_coefficient": 100, "capacity_ratio": 0.5 },
-  "reference_algorithm": "dp",
-  "created": "2026-11-14T13:40:00",
-  "environment": { "interpreter": "GNU Octave", "version": "11.3.0", "computer": "...",
-                   "process_memory_available": true,
-                   "algorithms": { "ilp": { "solver": "glpk" } } },
-  "parameters": { "seed": 2026, "instances": { "count": 100, "...": "..." }, "algorithms": ["bnb", "dp", "ilp", "qubo", "qubo_chz"],
-                  "dp": { "repeats": 5 }, "bnb": { "max_nodes": 5000000, "repeats": 1 },
-                  "ilp": { "repeats": 3 }, "qubo": { "penalty": "auto", "tabu": { "...": "..." }, "repeats": 1 },
-                  "qubo_chz": { "penalty": "auto", "seed_offset": 0, "tabu": { "...": "..." }, "repeats": 1 } },
-  "summary": {
-    "num_instances": 100, "total_time_seconds": 0,
-    "algorithms": {
-      "dp":   { "algorithm": "Dynamic Programming 0-1", "exact": true,
-                "num_optimal": 100, "num_proven_optimal": 100, "num_feasible": 100,
-                "mean_gap_percent": 0, "max_gap_percent": 0,
-                "total_wall_time_s": 0, "mean_wall_time_s": 0, "median_wall_time_s": 0,
-                "max_wall_time_s": 0, "mean_cpu_time_s": 0,
-                "mean_working_memory_bytes": 0, "median_working_memory_bytes": 0,
-                "max_working_memory_bytes": 0, "mean_operations": 0, "max_operations": 0,
-                "operations_unit": "table cells",
-                "median_time_ratio_vs_reference": 1, "median_memory_ratio_vs_reference": 1,
-                "by_family": [ { "family": "strongly_correlated", "count": 33, "num_optimal": 33,
-                                 "mean_gap_percent": 0, "mean_wall_time_s": 0,
-                                 "max_wall_time_s": 0, "mean_working_memory_bytes": 0 } ] },
-      "bnb":  { "...": "same fields" },
-      "ilp":  { "...": "same fields" },
-      "qubo": { "...": "same fields" },
-      "qubo_chz": { "...": "same fields" }
-    },
-    "ranking_by_median_time": ["...", "..."]
-  },
-  "instances": [
-    { "id": 1, "family": "uncorrelated", "n": 10, "capacity": 285,
-      "weights": [], "values": [], "optimum": 345, "optimal_items": [],
-      "results": {
-        "dp":  { "algorithm": "Dynamic Programming 0-1", "exact": true, "proven_optimal": true,
-                 "value": 345, "items": [], "weight": 0, "feasible": true,
-                 "is_optimal": true, "gap_percent": 0,
-                 "cost": { "repeats": 5, "wall_time_s": 0, "wall_time_min_s": 0, "cpu_time_s": 0,
-                           "working_memory_bytes": 0, "process_memory_before_bytes": 0,
-                           "process_memory_after_bytes": 0, "process_memory_delta_bytes": 0,
-                           "operations": 0, "operations_unit": "table cells" },
-                 "details": { "table_cells": 0 },
-                 "cost_ratio_vs_reference": { "time": 1, "cpu": 1, "memory": 1 } },
-        "bnb": { "...": "...", "details": { "nodes": 0, "node_limit": 5000000, "node_limit_reached": false } },
-        "ilp": { "...": "...", "details": { "solver": "glpk", "status": 5 } },
-        "qubo": { "...": "...",
-                  "details": { "penalty": 101, "variables": 19, "slack_bits": 9,
-                               "model_memory_bytes": 0, "energy": -345, "iterations": 0,
-                               "raw_items": [], "raw_value": 345, "raw_weight": 0,
-                               "feasible_before_repair": true, "repaired": false,
-                               "build_time_s": 0, "solve_time_s": 0, "decode_time_s": 0 } },
-        "qubo_chz": { "algorithm": "QUBO CHZ + Tabu Search (slack-optimal)", "...": "same fields as qubo" }
-      } }
-  ]
-}
-```
-
-Item indices are 1-based. `gap_percent` = 100 · (optimum − value) / optimum, with the optimum of the reference algorithm (`dp`). Algorithms and results are in alphabetical order of their ids.
+`raw.json` is described by the knapsack-server contracts (`rawFileSchema`, `libs/contracts`), the run file built from it (`schema_version` 4) in the `documentation` repo (`functional/output-format.md`). Item indices are 1-based; algorithms and results are in alphabetical order of their ids.
 
 ## Notes
 

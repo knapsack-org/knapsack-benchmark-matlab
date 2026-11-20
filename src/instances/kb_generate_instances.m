@@ -9,7 +9,7 @@ function instances = kb_generate_instances(count, seed, min_items, max_items, R,
 
   families = {'uncorrelated', 'weakly_correlated', 'strongly_correlated'};
   state = kb_seed(seed);
-  instances = struct('family', {}, 'weights', {}, 'values', {}, 'capacity', {});
+  instances = struct('id', {}, 'family', {}, 'weights', {}, 'values', {}, 'capacity', {});
 
   for k = 1:count
     if count > 1
@@ -30,6 +30,7 @@ function instances = kb_generate_instances(count, seed, min_items, max_items, R,
         v = w + floor(R / 10);
     end
 
+    instances(k).id = k;                 % global instance id (also inside a shard)
     instances(k).family = family;
     instances(k).weights = w;
     instances(k).values = v;
