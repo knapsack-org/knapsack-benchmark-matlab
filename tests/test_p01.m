@@ -1,9 +1,10 @@
 function test_p01()
 %TEST_P01  Smoke test on the reference instance P01 (optimum 309, items 1 2 3 4 6):
 %   every discovered algorithm through its adapter (exact -> 309, heuristic ->
-%   feasible, entry and details valid against its JSON Schema), then the
-%   algorithm-specific checks: DP, branch and bound, ILP, knapsack -> QUBO, tabu
-%   searches, slack encoding, and the qubo_chz copy (must match qubo).
+%   feasible, entry, config and details keys as in its kp_algo_<id>_output.schema.json),
+%   run_benchmark('--describe'), a request + instances.json + shard round trip
+%   (global seeds), then the algorithm-specific checks: DP, branch and bound, ILP,
+%   knapsack -> QUBO, tabu searches, slack encoding, and the qubo_chz copy (must match qubo).
 %   Run from the project root:  octave-cli --eval "addpath('tests'); test_p01"
   root = fileparts(fileparts(mfilename('fullpath')));
   addpath(root, genpath(fullfile(root, 'src')));
@@ -24,26 +25,67 @@ function test_p01()
     if A.exact
       assert(value == 309, sprintf('%s: exact algorithm should find 309, got %g', A.id, value));
     end
-    kb_validate_schema(out.details, A.output.schema.details, [A.id '.details']);
-    kb_validate_schema(A.output.entry(cfg.(A.id), A.environment), A.output.schema.entry, A.id);
+    schema = jsondecode(fileread(A.schema_file));
+    e = A.output.entry(cfg.(A.id), A.environment);
+    conforms(out.details, schema.details, [A.id '.details']);
+    conforms(e, schema.entry, A.id);
+    conforms(e.config, schema.config, [A.id '.config']);
   end
   for s = 1:numel(skipped)
     fprintf('test_p01: %s not available here, skipped\n', skipped{s}.id);
   end
 
-  % the schema validator rejects what it must
-  sch = jsondecode(['{"type": "object", "additionalProperties": false, "required": ["a"],' ...
-                    ' "properties": {"a": {"type": "integer", "minimum": 0}}}']);
-  kb_validate_schema(struct('a', 2), sch);
-  bad = {struct('a', -1), struct('a', 1.5), struct('b', 1), struct('a', 1, 'b', 2), {1}};
-  for i = 1:numel(bad)
-    try
-      kb_validate_schema(bad{i}, sch);
-      error('test_p01:accepted', 'validator accepted bad value %d', i);
-    catch err
-      assert(strcmp(err.identifier, 'kb_validate_schema:invalid'), err.message);
-    end
+  % --describe: every algorithm with its default settings and schema files (knapsack-server catalog)
+  d = jsondecode(evalc('run_benchmark(''--describe'');'));
+  assert(strcmp(d.project, 'knapsack-benchmark-matlab') && numel(d.algorithms) == numel(algos), 'describe');
+  assert(numel(algos) + numel(skipped) == 10, 'describe: 10 algorithm folders');
+  assert(isequal(sort(fieldnames(d.algorithm_schemas))', sort({algos.id})), 'describe: one schema each');
+  for i = 1:numel(algos)
+    assert(all(isfield(d.algorithm_schemas.(algos(i).id), {'entry', 'config', 'details'})), 'describe: parts');
   end
+
+  % request overrides, instances.json, and a shard with global ids gives the same results (P7)
+  tmp = tempname();
+  mkdir(tmp);
+  write_text(fullfile(tmp, 'req.json'), ['{"seed": 7, "instances": {"count": 3, "max_items": 12},' ...
+             ' "algorithms": ["sa"], "algorithm_config": {"sa": {"restarts": 1}}}']);
+  run_benchmark(fullfile(tmp, 'req.json'), '', fullfile(tmp, 'full'));
+  full = jsondecode(fileread(fullfile(tmp, 'full', 'raw.json')));
+  iset = jsondecode(fileread(fullfile(tmp, 'full', 'instances.json')));
+  assert(strcmp(full.format, 'knapsack-raw') && full.format_version == 1, 'raw format');
+  assert(isequal(full.parameters.algorithms(:)', {'dp', 'sa'}) && full.parameters.sa.restarts == 1 ...
+         && full.instance_config.seed == 7 && full.instance_config.max_items == 12, 'request applied');
+  assert(strcmp(iset.format, 'knapsack-instances') && isequal([iset.instances.id], 1:3), 'instances.json');
+  assert(~isfield(full.instances(1).results.sa, 'is_optimal'), 'raw results only');
+  iset.instances = {iset.instances(2)};          % shard: instance 2 only
+  write_text(fullfile(tmp, 'shard.json'), jsonencode(iset));
+  write_text(fullfile(tmp, 'req2.json'), '{"algorithms": ["sa"], "algorithm_config": {"sa": {"restarts": 1}}}');
+  run_benchmark(fullfile(tmp, 'req2.json'), fullfile(tmp, 'shard.json'), fullfile(tmp, 'shard'));
+  part = jsondecode(fileread(fullfile(tmp, 'shard', 'raw.json')));
+  assert(~exist(fullfile(tmp, 'shard', 'instances.json'), 'file'), 'no instances.json with an instances file');
+  assert(part.parameters.seed == 7 && numel(part.instances) == 1 && part.instances(1).id == 2, 'shard');
+  for id = {'dp', 'sa'}
+    a = part.instances(1).results.(id{1});
+    b = full.instances(2).results.(id{1});
+    assert(a.value == b.value && isequal(a.items, b.items) && isequal(a.details, b.details), ...
+           [id{1} ': shard result differs']);
+  end
+  try
+    kb_discover_algorithms({'julia'});
+    error('test_p01:accepted', 'unknown algorithm accepted');
+  catch err
+    assert(strcmp(err.identifier, 'kb_discover_algorithms:unknown'), err.message);
+  end
+  try
+    kb_merge_settings(struct('repeats', 1), struct('nope', 1), 'sa');
+    error('test_p01:accepted', 'unknown setting accepted');
+  catch err
+    assert(strcmp(err.identifier, 'kb_merge_settings:unknown'), err.message);
+  end
+  if exist('confirm_recursive_rmdir', 'builtin') || exist('confirm_recursive_rmdir', 'file')
+    confirm_recursive_rmdir(false);
+  end
+  rmdir(tmp, 's');
 
   [items, info] = kp_algo_dp_main(v, w, C);
   assert(info.value == 309, 'DP optimum should be 309');
@@ -129,4 +171,29 @@ function test_p01()
   end
 
   disp('test_p01: all checks passed');
+end
+
+function conforms(x, schema, where)
+%CONFORMS  X has the required fields of SCHEMA and, with additionalProperties false, no others (recursively).
+  if ~isstruct(x) || ~isfield(schema, 'properties')
+    return;
+  end
+  props = fieldnames(schema.properties);
+  if isfield(schema, 'required')
+    missing = setdiff(schema.required, fieldnames(x));
+    assert(isempty(missing), sprintf('%s: missing %s', where, sprintf('%s ', missing{:})));
+  end
+  if isfield(schema, 'additionalProperties') && isequal(schema.additionalProperties, false)
+    extra = setdiff(fieldnames(x), props);
+    assert(isempty(extra), sprintf('%s: unexpected %s', where, sprintf('%s ', extra{:})));
+  end
+  for f = intersect(fieldnames(x), props)'
+    conforms(x.(f{1}), schema.properties.(f{1}), [where '.' f{1}]);
+  end
+end
+
+function write_text(file, txt)
+  fid = fopen(file, 'w');
+  fprintf(fid, '%s', txt);
+  fclose(fid);
 end
