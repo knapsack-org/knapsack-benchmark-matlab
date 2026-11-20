@@ -65,6 +65,7 @@ knapsack-benchmark-matlab/
 │   │   ├── kb_print_instance.m, kb_print_progress.m   console output, progress lines
 │   │   ├── kb_interpreter.m         'GNU Octave' or 'MATLAB'
 │   │   ├── kb_lcg.m, kb_randi.m, kb_seed.m   portable random numbers (same in MATLAB, Octave, Python)
+│   │   ├── kb_lcg_states.m          the next COUNT generator states in O(log COUNT) vector operations
 │   │   ├── kb_bytes.m               working memory of arrays (whos)
 │   │   ├── kb_process_memory.m      process RAM snapshot (memory())
 │   │   └── kb_write_json.m          JSON output
@@ -157,6 +158,8 @@ Measured on the Octave 11.3 / Windows test machine (4-algorithm run, 100 instanc
 | `qubo` | 44 | 0.62 s | 1.4 s | 65.6 s | 15 kB |
 
 Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `qubo`.
+
+These times predate the phase-3 speed-ups (same results): on the 10 reference instances `qubo` and `qubo_chz` are now about 3× faster (all restarts searched at once), `ising` about 2×, `sa` about 3×, `ga` about 24×.
 
 ## Output file
 
