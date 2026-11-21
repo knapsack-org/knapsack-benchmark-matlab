@@ -6,7 +6,7 @@ Benchmark of nine 0-1 knapsack algorithms (`bnb`, `dp`, `fptas`, `ga`, `greedy`,
 |---|---|---|---|
 | `bnb` | Branch and bound | exact | `src/algorithms/bnb/kp_algo_bnb_main.m`, depth-first, Dantzig (LP) bound, greedy start |
 | `dp` | Dynamic programming 0-1 | exact (reference optimum) | `src/algorithms/dp/kp_algo_dp_main.m`, vectorised table, O(n·C) |
-| `ilp` | Integer linear programming | exact | `src/algorithms/ilp/kp_algo_ilp_main.m`: `glpk` in Octave, `intlinprog` in MATLAB (Optimization Toolbox) |
+| `ilp` | Integer linear programming | exact | `src/algorithms/ilp/kp_algo_ilp_main.m`: `glpk` in Octave, `intlinprog` in MATLAB (Optimization Toolbox); `ilp.time_limit_s` (default 10 s per solve): when reached, not proven optimal (Octave's `glpk` then returns no solution: empty packing, status -1) |
 | `qubo` | QUBO + tabu search | heuristic | `src/algorithms/qubo/kp_algo_qubo_main.m` (modules `kb_knapsack2qubo.m`, `kb_qubo_tabu_slack.m`, …) |
 
 The algorithms are found by scanning `src/algorithms/` (one folder per algorithm, see [Adding an algorithm](#adding-an-algorithm)); they run in alphabetical order. For each of **100 generated instances** every algorithm is run and measured on:

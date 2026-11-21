@@ -101,6 +101,16 @@ function test_p01()
     [items, info] = kp_algo_ilp_main(v, w, C);
     assert(info.value == 309 && isequal(items, [1 2 3 4 6]) && info.proven_optimal, ...
            'ILP should find 309');
+    [~, info] = kp_algo_ilp_main(v, w, C, 10);
+    assert(info.value == 309 && info.proven_optimal, 'ILP with a time limit should still find 309');
+    % instance 69 of seed 2026, 10..100 items, ratio 0.7 (strongly correlated, n = 72): GLPK needed ~20 min
+    hard = kb_generate_instances(100, 2026, 10, 100, 100, 0.7);
+    hard = hard(69);
+    assert(strcmp(hard.family, 'strongly_correlated') && numel(hard.weights) == 72, 'hard ILP instance');
+    t = tic;
+    [items, info] = kp_algo_ilp_main(hard.values, hard.weights, hard.capacity, 0.05);
+    assert(~info.proven_optimal && toc(t) < 5 && sum(hard.weights(items)) <= hard.capacity, ...
+           'ILP time limit');
   else
     disp('test_p01: no ILP solver, ILP check skipped');
   end
