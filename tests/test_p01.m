@@ -4,7 +4,7 @@ function test_p01()
 %   feasible, entry, config and details keys as in its kp_algo_<id>_output.schema.json),
 %   run_benchmark('--describe'), a request + instances.json + shard round trip
 %   (global seeds), then the algorithm-specific checks: DP, branch and bound, ILP,
-%   knapsack -> QUBO, tabu searches, slack encoding, and the qubo_chz copy (must match qubo).
+%   knapsack -> QUBO, tabu searches, slack encoding.
 %   Run from the project root:  octave-cli --eval "addpath('tests'); test_p01"
   root = fileparts(fileparts(mfilename('fullpath')));
   addpath(root, genpath(fullfile(root, 'src')));
@@ -38,7 +38,7 @@ function test_p01()
   % --describe: every algorithm with its default settings and schema files (knapsack-server catalog)
   d = jsondecode(evalc('run_benchmark(''--describe'');'));
   assert(strcmp(d.project, 'knapsack-benchmark-matlab') && numel(d.algorithms) == numel(algos), 'describe');
-  assert(numel(algos) + numel(skipped) == 10, 'describe: 10 algorithm folders');
+  assert(numel(algos) + numel(skipped) == 9, 'describe: 9 algorithm folders');
   assert(isequal(sort(fieldnames(d.algorithm_schemas))', sort({algos.id})), 'describe: one schema each');
   for i = 1:numel(algos)
     assert(all(isfield(d.algorithm_schemas.(algos(i).id), {'entry', 'config', 'details'})), 'describe: parts');
@@ -124,19 +124,8 @@ function test_p01()
   assert(sol.final_weight <= C && abs(x' * Q * x + c' * x + d - f) < 1e-9, ...
          'all-bits tabu returned an inconsistent solution');
 
-  % qubo_chz copy must behave like the original
-  [Qz, cz, dz] = kb_chz_knapsack2qubo(v, w, C, max(v) + 1);
-  [Q, c, d] = kb_knapsack2qubo(v, w, C, max(v) + 1);
-  assert(isequal(Qz, Q) && isequal(cz, c) && dz == d, 'qubo_chz model differs from qubo');
-  [xz, fz] = kb_chz_qubo_tabu_slack(v, w, C, max(v) + 1, Qz, cz, dz, opts);
-  [xq, fq] = kb_qubo_tabu_slack(v, w, C, max(v) + 1, Q, c, d, opts);
-  assert(isequal(xz, xq) && fz == fq && fz == -309, 'qubo_chz tabu differs from qubo');
-  solz = kb_chz_decode(xz, v, w, C);
-  assert(solz.final_value == 309, 'qubo_chz should reach 309 on P01');
-
   for s = 0:17                                  % slack encoding round trip (M = 17)
     assert(sum(kb_encode_slack(s, 17)' .* [1 2 4 8 2]) == s, 'slack encoding');
-    assert(isequal(kb_chz_encode_slack(s, 17), kb_encode_slack(s, 17)), 'qubo_chz slack encoding');
   end
 
   % greedy: feasible, at least half of the optimum
