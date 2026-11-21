@@ -1,6 +1,6 @@
 # knapsack-benchmark-matlab
 
-Benchmark of ten 0-1 knapsack algorithms (`bnb`, `dp`, `fptas`, `ga`, `greedy`, `ilp`, `ising`, `qubo`, `qubo_chz`, `sa`; the table lists the first five), written in MATLAB-compatible code and run with **GNU Octave** (free). It also runs unchanged in MATLAB.
+Benchmark of nine 0-1 knapsack algorithms (`bnb`, `dp`, `fptas`, `ga`, `greedy`, `ilp`, `ising`, `qubo`, `sa`; the table lists the first five), written in MATLAB-compatible code and run with **GNU Octave** (free). It also runs unchanged in MATLAB.
 
 | Key | Algorithm | Type | Implementation |
 |---|---|---|---|
@@ -8,7 +8,6 @@ Benchmark of ten 0-1 knapsack algorithms (`bnb`, `dp`, `fptas`, `ga`, `greedy`, 
 | `dp` | Dynamic programming 0-1 | exact (reference optimum) | `src/algorithms/dp/kp_algo_dp_main.m`, vectorised table, O(n·C) |
 | `ilp` | Integer linear programming | exact | `src/algorithms/ilp/kp_algo_ilp_main.m`: `glpk` in Octave, `intlinprog` in MATLAB (Optimization Toolbox) |
 | `qubo` | QUBO + tabu search | heuristic | `src/algorithms/qubo/kp_algo_qubo_main.m` (modules `kb_knapsack2qubo.m`, `kb_qubo_tabu_slack.m`, …) |
-| `qubo_chz` | QUBO CHZ: independent copy of `qubo` | heuristic | `src/algorithms/qubo_chz/`, own modules `kb_chz_*.m` and settings `cfg.qubo_chz` |
 
 The algorithms are found by scanning `src/algorithms/` (one folder per algorithm, see [Adding an algorithm](#adding-an-algorithm)); they run in alphabetical order. For each of **100 generated instances** every algorithm is run and measured on:
 - **quality**: value, items, feasibility, gap to the optimum of the reference algorithm (`dp`), proven optimality;
@@ -41,9 +40,9 @@ or in the Octave GUI: `cd` to this folder, then `run_benchmark`.
 
 Output: `raw.json` (`format: "knapsack-raw"`, `format_version` 1: algorithm entries and schemas, parameters, raw results per instance without `is_optimal`, `gap_percent`, `cost_ratio_vs_reference`) and, without an instances file, `instances.json`. stdout has one line per instance plus progress lines `@@progress {"instance":<id>,"algorithm":"<id>","event":"start"|"done"}` before and after each algorithm. A full run file: `pnpm -C <knapsack-server> knapsack-output <out dir>`.
 
-The settings files: `benchmark_config.m` (master seed), `src/instances/kb_config_instances.m` (number and size of instances) and `src/algorithms/<id>/kp_algo_<id>_config.m` (settings of one algorithm, e.g. `bnb.max_nodes`, `qubo.tabu.mode`, `qubo_chz.seed_offset`).
+The settings files: `benchmark_config.m` (master seed), `src/instances/kb_config_instances.m` (number and size of instances) and `src/algorithms/<id>/kp_algo_<id>_config.m` (settings of one algorithm, e.g. `bnb.max_nodes`, `qubo.tabu.mode`).
 
-Tests (every discovered algorithm on P01 through its adapter, keys checked against its schema file; `--describe`; request, instances file and shard (global seeds) round trip; P01 = 309 for DP, B&B and ILP; MathWorks `knapsack2qubo` example; QUBO solvers; slack encoding; `qubo_chz` identical to `qubo`):
+Tests (every discovered algorithm on P01 through its adapter, keys checked against its schema file; `--describe`; request, instances file and shard (global seeds) round trip; P01 = 309 for DP, B&B and ILP; MathWorks `knapsack2qubo` example; QUBO solvers; slack encoding):
 
 ```
 octave-cli --eval "addpath('tests'); test_p01"
@@ -77,16 +76,14 @@ knapsack-benchmark-matlab/
 │       ├── dp/                      dynamic programming 0-1 (exact, reference): kp_algo_dp_*.m
 │       ├── ilp/                     integer linear programming via glpk / intlinprog (exact)
 │       │   └── modules/kb_ilp_solver_name.m   intlinprog / glpk / none (loader availability)
-│       ├── qubo/                    kp_algo_qubo_*.m
-│       │   └── modules/
-│       │       ├── kb_penalty.m             penalty rule 'auto' = max(v) + 1
-│       │       ├── kb_knapsack2qubo.m       knapsack → QUBO (Q, c, d), binary-encoded slack
-│       │       ├── kb_qubo_tabu_slack.m     tabu search, item bits flipped, slack bits set optimally (default)
-│       │       ├── kb_qubo_tabu.m           plain single-bit-flip tabu search on all QUBO bits
-│       │       ├── kb_encode_slack.m        slack value → slack bits
-│       │       └── kb_decode.m              QUBO vector → items / value / weight (+ repair)
-│       └── qubo_chz/                kp_algo_qubo_chz_*.m + modules/kb_chz_*.m: independent copies
-│                                    of the six QUBO modules, to be modified without touching qubo
+│       └── qubo/                    kp_algo_qubo_*.m
+│           └── modules/
+│               ├── kb_penalty.m             penalty rule 'auto' = max(v) + 1
+│               ├── kb_knapsack2qubo.m       knapsack → QUBO (Q, c, d), binary-encoded slack
+│               ├── kb_qubo_tabu_slack.m     tabu search, item bits flipped, slack bits set optimally (default)
+│               ├── kb_qubo_tabu.m           plain single-bit-flip tabu search on all QUBO bits
+│               ├── kb_encode_slack.m        slack value → slack bits
+│               └── kb_decode.m              QUBO vector → items / value / weight (+ repair)
 ├── tests/test_p01.m
 └── output/                    run-dd-mm-yy-hh-mm/ folders (git-ignored)
 ```
@@ -104,7 +101,7 @@ Everything about an algorithm lives in `src/algorithms/<id>/` (`<id>` matches `[
 | `kp_algo_<id>_output.schema.json` | JSON Schema 2020-12 of its `entry` (with `config` as an object), `config` and `details`; byte-identical to the Python file (knapsack-server `scripts/check-schemas.mjs`), checked by knapsack-server's output formatter |
 | `modules/` | helper functions of `_main` (optional) |
 
-`.m` file names must be unique across all algorithm folders (they share one path); `kb_discover_algorithms` stops with an error otherwise. Algorithms may call `src/helpers/` but never another algorithm's folder: shared code is copied (e.g. `kb_penalty.m` / `kb_chz_penalty.m`). See also `documentation/implementation/adding-an-algorithm.md`.
+`.m` file names must be unique across all algorithm folders (they share one path); `kb_discover_algorithms` stops with an error otherwise. Algorithms may call `src/helpers/` but never another algorithm's folder: shared code is copied into the folder's own `modules/`. See also `documentation/implementation/adding-an-algorithm.md`.
 
 ## Method
 
@@ -118,19 +115,17 @@ Everything about an algorithm lives in `src/algorithms/<id>/` (`<id>` matches `[
 
 **QUBO.** Minimise f(x, s) = −Σ vᵢxᵢ + P · (Σ wᵢxᵢ + s − C)², slack s on ⌈log₂(C+1)⌉ bits; P = max(v) + 1 (then the QUBO minimum is the knapsack optimum). Same model as MATLAB's `knapsack2qubo`. Solved by a multi-start tabu search (20 restarts, tenure 10 + n/10, aspiration) that flips item bits and sets the slack bits to their optimal value (every visited point is a valid QUBO assignment; the energy is recomputed from Q, c, d). The `all-bits` mode is the textbook single-bit-flip version, kept for comparison.
 
-**QUBO CHZ (`qubo_chz`).** An independent replica of the QUBO pipeline: its own six modules (`src/algorithms/qubo_chz/modules/kb_chz_*.m`) and its own settings block `cfg.qubo_chz` (`penalty`, `seed_offset`, `tabu`). It shares only the infrastructure (random generator, memory helper, JSON writer). When created it is identical to `qubo`: same model, solver and random starts (`seed_offset = 0`), so it gives the same solutions; only its timings differ slightly. Change its files or settings to experiment without affecting `qubo`.
-
 ## Execution cost measures
 
 Each algorithm result has a `cost` object:
 
 | Field | Meaning |
 |---|---|
-| `wall_time_s` / `wall_time_min_s` | median / fastest wall-clock time over the repeats (`tic`/`toc`). Repeats: dp 5, bnb 1, ilp 3, qubo and qubo_chz 1 (`repeats` in `kp_algo_<id>_config.m`) |
+| `wall_time_s` / `wall_time_min_s` | median / fastest wall-clock time over the repeats (`tic`/`toc`). Repeats: dp 5, bnb 1, ilp 3, qubo 1 (`repeats` in `kp_algo_<id>_config.m`) |
 | `cpu_time_s` | CPU time per run (`cputime`) |
 | `working_memory_bytes` | bytes held by the algorithm's own arrays (`whos` at the end of the function): DP table; B&B vectors; ILP problem data (the solver's internal memory is not visible); QUBO Q, c and search vectors |
 | `process_memory_before/after/delta_bytes` | process RAM from `memory()` (Octave on Linux and Windows; MATLAB on Windows only), `null` when unavailable. Process-wide snapshot: indicative only |
-| `operations` + `operations_unit` | dp: table cells n·(C+1) · bnb: nodes · ilp: B&B nodes (`intlinprog` only, `null` with glpk) · qubo, qubo_chz: move evaluations |
+| `operations` + `operations_unit` | dp: table cells n·(C+1) · bnb: nodes · ilp: B&B nodes (`intlinprog` only, `null` with glpk) · qubo: move evaluations |
 
 and a `cost_ratio_vs_reference` object (`time`, `cpu`, `memory`; > 1 means costlier than the reference algorithm `dp`).
 
@@ -144,7 +139,6 @@ Quality and operation counts were computed with a line-by-line Python copy of th
 | `bnb` | 100 / 100 (all proven) | 0 % | nodes: median 114, mean ≈ 4 900, max 284 157 |
 | `ilp` | 100 / 100 expected | 0 % | exact solver (not run in the Python copy) |
 | `qubo` | 44 / 100 | 1.02 % (max 4.80 %) | all feasible before repair |
-| `qubo_chz` | 44 / 100 | 1.02 % (max 4.80 %) | identical to `qubo` until modified |
 
 Branch-and-bound nodes by family: uncorrelated mean 73 (max 152), weakly correlated mean 140 (max 377), **strongly correlated mean 14 608 (max 284 157)**. B&B is very fast on easy instances and explodes on strongly correlated ones, while DP's cost depends only on n·C.
 
@@ -157,9 +151,9 @@ Measured on the Octave 11.3 / Windows test machine (4-algorithm run, 100 instanc
 | `bnb` | 100 | 5.6 ms | 10.9 s (instance 96) | 19.3 s | 2.3 kB |
 | `qubo` | 44 | 0.62 s | 1.4 s | 65.6 s | 15 kB |
 
-Ranking by median time: ilp < dp < bnb < qubo. `qubo_chz` should measure like `qubo`.
+Ranking by median time: ilp < dp < bnb < qubo.
 
-These times predate the phase-3 speed-ups (same results): on the 10 reference instances `qubo` and `qubo_chz` are now about 3× faster (all restarts searched at once), `ising` about 2×, `sa` about 3×, `ga` about 24×.
+These times predate the phase-3 speed-ups (same results): on the 10 reference instances `qubo` is now about 3× faster (all restarts searched at once), `ising` about 2×, `sa` about 3×, `ga` about 24×.
 
 ## Output file
 
