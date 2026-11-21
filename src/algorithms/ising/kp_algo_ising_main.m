@@ -19,10 +19,10 @@ function [items, info] = kp_algo_ising_main(v, w, C, acfg, seed, mark)
     penalty = acfg.penalty;
   end
 
-  [J, h, E0, slack_bits] = kb_ising_model(v, w, C, penalty);
+  [J, h, E0, slack_bits, a] = kb_ising_model(v, w, C, penalty);
   mark('build');
 
-  [s, energy, stats] = kb_ising_anneal(J, h, E0, acfg, seed, penalty * max(w));
+  [s, energy, stats] = kb_ising_anneal(J, h, E0, acfg, seed, penalty * max(w), a, penalty);
   mark('solve');
 
   sol = kb_ising_decode(s, v, w, C);
