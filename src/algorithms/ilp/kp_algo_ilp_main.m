@@ -1,7 +1,8 @@
 function [items, info] = kp_algo_ilp_main(v, w, C, varargin)
 %KP_ALGO_ILP_MAIN  Exact 0-1 knapsack as an integer linear program.
-%   [ITEMS, INFO] = KP_ALGO_ILP_MAIN(V, W, C) (settings, seed and phase marks are accepted and not used;
-%   no ~ placeholders: Octave would add an ans variable to the whos memory count).
+%   [ITEMS, INFO] = KP_ALGO_ILP_MAIN(V, W, C, TIME_LIMIT_S): TIME_LIMIT_S (optional) caps one solve;
+%   the best packing found is returned, not proven optimal. No ~ placeholders: Octave would add an
+%   ans variable to the whos memory count.
 %       max v'*x   s.t.  w'*x <= C,  x binary
 %   MATLAB with Optimization Toolbox -> intlinprog (HiGHS since R2024a);
 %   GNU Octave (or MATLAB without the toolbox but with glpk) -> glpk (GLPK).
@@ -15,10 +16,14 @@ function [items, info] = kp_algo_ilp_main(v, w, C, varargin)
   info = struct('solver', '', 'status', NaN, 'proven_optimal', false, 'nodes', NaN, ...
                 'working_memory_bytes', 0);
   is_octave = exist('OCTAVE_VERSION', 'builtin') > 0;
+  limit = Inf;
+  if nargin > 3 && ~isempty(varargin{1})
+    limit = varargin{1};
+  end
 
   if ~is_octave && exist('intlinprog') > 0 %#ok<EXIST>
     % gap 0: prove optimality like glpk and scipy milp (default RelativeGapTolerance is 1e-4)
-    opts = optimoptions('intlinprog', 'Display', 'off', 'RelativeGapTolerance', 0);
+    opts = optimoptions('intlinprog', 'Display', 'off', 'RelativeGapTolerance', 0, 'MaxTime', limit);
     [x, fval, exitflag, output] = intlinprog(-v, 1:n, w', C, [], [], zeros(n, 1), ...
                                              ones(n, 1), opts); %#ok<ASGLU>
     info.solver = 'intlinprog';
@@ -29,6 +34,9 @@ function [items, info] = kp_algo_ilp_main(v, w, C, varargin)
     end
   elseif exist('glpk') > 0 %#ok<EXIST>
     param = struct('msglev', 0);         % silent
+    if isfinite(limit)
+      param.tmlim = round(1000 * limit);  % milliseconds
+    end
     [x, fopt, errnum, extra] = glpk(v, w', C, zeros(n, 1), ones(n, 1), 'U', ...
                                     repmat('I', 1, n), -1, param); %#ok<ASGLU>
     info.solver = 'glpk';
@@ -42,6 +50,7 @@ function [items, info] = kp_algo_ilp_main(v, w, C, varargin)
   take = round(x(:)') > 0;
   items = find(take);
   best = sum(v(take));
+  clear varargin limit                   % the setting is not the algorithm's memory
   vars = whos();
   info.working_memory_bytes = sum([vars.bytes]);
   info.value = best;
