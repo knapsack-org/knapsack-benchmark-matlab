@@ -3,6 +3,6 @@ function c = kp_algo_ilp_config()
   c = struct();
   % Per solve: a hard instance (large, strongly correlated) stops here with its best packing,
   % reported as not proven optimal, instead of blocking the run.
-  c.time_limit_s = 10;
+  c.time_limit_s = 60;
   c.repeats = 3;
 end
