@@ -1,13 +1,15 @@
 # knapsack-benchmark-matlab
 
-Benchmark of nine 0-1 knapsack algorithms (`bnb`, `dp`, `fptas`, `ga`, `greedy`, `ilp`, `ising`, `qubo`, `sa`; the table lists the first five), written in MATLAB-compatible code and run with **GNU Octave** (free). It also runs unchanged in MATLAB.
+Benchmark of eleven 0-1 knapsack algorithms (`bnb`, `dp`, `fptas`, `ga`, `greedy`, `ilp`, `ising`, `qc`, `qubo`, `qubo_b`, `sa`; the table lists the exact ones and the QUBO family), written in MATLAB-compatible code and run with **GNU Octave** (free). It also runs unchanged in MATLAB.
 
 | Key | Algorithm | Type | Implementation |
 |---|---|---|---|
 | `bnb` | Branch and bound | exact | `src/algorithms/bnb/kp_algo_bnb_main.m`, depth-first, Dantzig (LP) bound, greedy start |
 | `dp` | Dynamic programming 0-1 | exact (reference optimum) | `src/algorithms/dp/kp_algo_dp_main.m`, vectorised table, O(n·C) |
 | `ilp` | Integer linear programming | exact | `src/algorithms/ilp/kp_algo_ilp_main.m`: `glpk` in Octave, `intlinprog` in MATLAB (Optimization Toolbox); `ilp.time_limit_s` (default 60 s per solve): when reached, not proven optimal (Octave's `glpk` then returns no solution: empty packing, status -1) |
-| `qubo` | QUBO + tabu search | heuristic | `src/algorithms/qubo/kp_algo_qubo_main.m` (modules `kb_knapsack2qubo.m`, `kb_qubo_tabu_slack.m`, …) |
+| `qubo` | QUBO variant A + tabu search | heuristic | `src/algorithms/qubo/kp_algo_qubo_main.m` (modules `kb_knapsack2qubo.m`, `kb_qubo_tabu_slack.m`, …) |
+| `qubo_b` | QUBO variant B + tabu search | heuristic | `src/algorithms/qubo_b/`: same code as `qubo` (modules `kb_qubo_b_*.m`); later MathWorks `knapsack2qubo` (steps in `kp_algo_qubo_b_main.m`, marked `TODO(knapsack2qubo)`) |
+| `qc` | QC: QUBO + tabu search | heuristic | `src/algorithms/qc/`: QUBO B code; `modules/kb_qc_qaoa.m` (simulated QAOA) and `kb_qc_greedy.m`, with commented calls in `kp_algo_qc_main.m` |
 
 The algorithms are found by scanning `src/algorithms/` (one folder per algorithm, see [Adding an algorithm](#adding-an-algorithm)); they run in alphabetical order. For each of **100 generated instances** every algorithm is run and measured on:
 - **quality**: value, items, feasibility, gap to the optimum of the reference algorithm (`dp`), proven optimality;
@@ -34,13 +36,13 @@ or in the Octave GUI: `cd` to this folder, then `run_benchmark`.
 
 | Argument | Meaning |
 |---|---|
-| request file | run request JSON (knapsack-server `RunRequest`): `seed`, `instances` (`count`, `min_items`, `max_items`, `max_coefficient`, `capacity_ratio`), `algorithms` (ids; the reference `dp` is always added), `algorithm_config` (`{<id>: partial settings}`, merged into the defaults; an unknown field is an error). Absent fields come from the settings files; `environments` is ignored |
+| request file | run request JSON (knapsack-server `RunRequest`): `seed`, `instances` (`count`, `min_items`, `max_items`, `max_coefficient`, `capacity_ratio`, `correlation`: `families`, `weak_noise_ratio`, `strong_offset_ratio`), `algorithms` (ids; the reference `dp` is always added), `algorithm_config` (`{<id>: partial settings}`, merged into the defaults; an unknown field is an error). Absent fields come from the settings files; `environments` is ignored |
 | instances file | instance set JSON (`format: "knapsack-instances"`, the `instances.json` of an earlier run or a knapsack-server shard) used instead of the generator; the per-instance seed stays `seed + 1000 * id` with the file's global ids |
 | out dir | output folder (default `output/run-dd-mm-yy-hh-mm/`) |
 
 Output: `raw.json` (`format: "knapsack-raw"`, `format_version` 1: algorithm entries and schemas, parameters, raw results per instance without `is_optimal`, `gap_percent`, `cost_ratio_vs_reference`) and, without an instances file, `instances.json`. stdout has one line per instance plus progress lines `@@progress {"instance":<id>,"algorithm":"<id>","event":"start"|"done"}` before and after each algorithm. A full run file: `pnpm -C <knapsack-server> knapsack-output <out dir>`.
 
-The settings files: `benchmark_config.m` (master seed), `src/instances/kb_config_instances.m` (number and size of instances) and `src/algorithms/<id>/kp_algo_<id>_config.m` (settings of one algorithm, e.g. `bnb.max_nodes`, `qubo.tabu.mode`).
+The settings files: `benchmark_config.m` (master seed), `src/instances/kb_config_instances.m` (number and size of instances, correlation: families rotated in order, weak noise and strong offset ratios) and `src/algorithms/<id>/kp_algo_<id>_config.m` (settings of one algorithm, e.g. `bnb.max_nodes`, `qubo.tabu.mode`).
 
 Tests (every discovered algorithm on P01 through its adapter, keys checked against its schema file; `--describe`; request, instances file and shard (global seeds) round trip; P01 = 309 for DP, B&B and ILP; MathWorks `knapsack2qubo` example; QUBO solvers; slack encoding):
 
@@ -76,7 +78,9 @@ knapsack-benchmark-matlab/
 │       ├── dp/                      dynamic programming 0-1 (exact, reference): kp_algo_dp_*.m
 │       ├── ilp/                     integer linear programming via glpk / intlinprog (exact)
 │       │   └── modules/kb_ilp_solver_name.m   intlinprog / glpk / none (loader availability)
-│       └── qubo/                    kp_algo_qubo_*.m
+│       ├── qc/                      QC: QUBO B code + modules/kb_qc_qaoa.m, kb_qc_greedy.m, kb_qc_*.m (QUBO copies)
+│       ├── qubo_b/                  QUBO variant B: copy of qubo/ (modules kb_qubo_b_*.m)
+│       └── qubo/                    QUBO variant A: kp_algo_qubo_*.m
 │           └── modules/
 │               ├── kb_penalty.m             penalty rule 'auto' = max(v) + 1
 │               ├── kb_knapsack2qubo.m       knapsack → QUBO (Q, c, d), binary-encoded slack
