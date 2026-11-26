@@ -38,7 +38,7 @@ function test_p01()
   % --describe: every algorithm with its default settings and schema files (knapsack-server catalog)
   d = jsondecode(evalc('run_benchmark(''--describe'');'));
   assert(strcmp(d.project, 'knapsack-benchmark-matlab') && numel(d.algorithms) == numel(algos), 'describe');
-  assert(numel(algos) + numel(skipped) == 9, 'describe: 9 algorithm folders');
+  assert(numel(algos) + numel(skipped) == 11, 'describe: 11 algorithm folders');
   assert(isequal(sort(fieldnames(d.algorithm_schemas))', sort({algos.id})), 'describe: one schema each');
   for i = 1:numel(algos)
     assert(all(isfield(d.algorithm_schemas.(algos(i).id), {'entry', 'config', 'details'})), 'describe: parts');
@@ -167,6 +167,83 @@ function test_p01()
     a1 = f(v, w, C, cfg.(id{1}), 7);
     a2 = f(v, w, C, cfg.(id{1}), 7);
     assert(isequal(a1, a2) && sum(w(a1)) <= C, [id{1} ': not reproducible or infeasible']);
+  end
+
+  % instance correlation settings (ADR 0023): defaults = the former generator, families, ratios
+  ic = kb_config_instances();
+  a = kb_generate_instances(30, 2026, 10, 20, 100, 0.5);
+  b = kb_generate_instances(30, 2026, 10, 20, 100, 0.5, ic.correlation);
+  assert(isequal(a, b) && isequal({a(1:3).family}, ic.correlation.families), 'correlation defaults');
+  cs = ic.correlation;
+  cs.families = {'strongly_correlated'};
+  cs.strong_offset_ratio = 0.2;
+  s6 = kb_generate_instances(6, 3, 5, 9, 50, 0.5, cs);
+  assert(all(arrayfun(@(i) strcmp(i.family, 'strongly_correlated') && isequal(i.values, i.weights + 10), s6)), ...
+         'strongly correlated only, offset 0.2');
+  cw = ic.correlation;
+  cw.families = 'weakly_correlated';               % one family as a string (jsondecode)
+  cw.weak_noise_ratio = 0;
+  w6 = kb_generate_instances(6, 3, 5, 9, 50, 0.5, cw);
+  assert(all(arrayfun(@(i) isequal(i.values, i.weights), w6)), 'weak noise 0 -> v = w');
+  co = ic.correlation;
+  co.families = {'strongly_correlated'; 'uncorrelated'};
+  o4 = kb_generate_instances(4, 3, 5, 9, 50, 0.5, co);
+  assert(isequal({o4.family}, {'strongly_correlated', 'uncorrelated', 'strongly_correlated', 'uncorrelated'}), ...
+         'families rotate in the given order');
+  bad = {struct('families', {{}}), struct('families', {{'uncorrelated', 'uncorrelated'}}), ...
+         struct('families', {{'anti_correlated'}}), struct('weak_noise_ratio', -0.1), ...
+         struct('strong_offset_ratio', 1.5)};
+  for k = 1:numel(bad)
+    cb = kb_merge_settings(ic.correlation, bad{k}, 'correlation');
+    try
+      kb_generate_instances(3, 1, 5, 9, 50, 0.5, cb);
+      error('test_p01:accepted', 'invalid correlation %d accepted', k);
+    catch err
+      assert(strcmp(err.identifier, 'kb_generate_instances:correlation'), err.message);
+    end
+  end
+  assert(all(arrayfun(@(R) floor(0.1 * R) == floor(R / 10), 1:100000)), 'floor(0.1 R) = floor(R / 10)');
+
+  % QUBO variant B and QC run the code of 'qubo': same items, energies and moves
+  insts = kb_generate_instances(12, 2026, 10, 48, 100, 0.5);
+  cases = [{struct('values', v, 'weights', w, 'capacity', C)}, num2cell(insts)];
+  for k = 1:numel(cases)
+    inst = cases{k};
+    [ia, xa] = kp_algo_qubo_main(inst.values, inst.weights, inst.capacity, cfg.qubo, 2026 + k);
+    [ib, xb] = kp_algo_qubo_b_main(inst.values, inst.weights, inst.capacity, cfg.qubo_b, 2026 + k);
+    [iq, xq] = kp_algo_qc_main(inst.values, inst.weights, inst.capacity, cfg.qc, 2026 + k);
+    assert(isequal(ia, ib, iq) && xa.energy == xb.energy && xa.energy == xq.energy ...
+           && xa.move_evaluations == xq.move_evaluations, sprintf('qubo_b / qc differ from qubo (case %d)', k));
+  end
+  assert(isequal(cfg.qubo_b, cfg.qubo) && isequal(rmfield(cfg.qc, 'qaoa'), cfg.qubo), 'same settings');
+
+  % QC greedy module = greedy algorithm
+  for i = kb_generate_instances(12, 7, 5, 40, 100, 0.5)
+    [g1, f1] = kb_qc_greedy(i.values, i.weights, i.capacity);
+    [g2, f2] = kp_algo_greedy_main(i.values, i.weights, i.capacity);
+    assert(isequal(g1, g2) && isequal(f1, f2), 'kb_qc_greedy differs from greedy');
+  end
+
+  % QAOA on the MathWorks example (same values as the Python port, tests/test_qc.py)
+  vq = [5 2 8 4 3];
+  wq = [9 8 4 5 2];
+  [Q, c, d] = kb_qc_knapsack2qubo(vq, wq, 17, max(vq) + 1);
+  o = cfg.qc.qaoa;
+  o.seed = 1;
+  [x, e, st] = kb_qc_qaoa(Q, c, d, o);
+  assert(isequal(x', [0 0 1 1 1 0 1 1 0 0]) && e == -15 && x' * Q * x + c' * x + d == e, 'QAOA state');
+  assert(max(abs(st.gamma - [3.46884188833873 7.00313362362725])) < 1e-12 ...
+         && max(abs(st.beta - [2.81434341884086 3.01069295969022])) < 1e-12 ...
+         && abs(st.expected_energy - 0.0232939696574762) < 1e-13 && st.iterations == 320, 'QAOA angles');
+  sol = kb_qc_decode(x, vq, wq, 17);
+  assert(sol.feasible && isequal(sol.final_items, [3 4 5]) && sol.final_value == 15, 'QAOA decode');
+  [Q, c, d] = kb_qc_knapsack2qubo(v, w, C, max(v) + 1);       % P01: 10 items + 8 slack bits
+  o.max_qubits = 17;
+  try
+    kb_qc_qaoa(Q, c, d, o);
+    error('test_p01:accepted', 'QAOA above max_qubits accepted');
+  catch err
+    assert(strcmp(err.identifier, 'kb_qc_qaoa:tooLarge'), err.message);
   end
 
   disp('test_p01: all checks passed');

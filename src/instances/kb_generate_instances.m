@@ -1,13 +1,20 @@
-function instances = kb_generate_instances(count, seed, min_items, max_items, R, capacity_ratio)
+function instances = kb_generate_instances(count, seed, min_items, max_items, R, capacity_ratio, correlation)
 %KB_GENERATE_INSTANCES  Reproducible 0-1 knapsack instances.
-%   Families rotate between the classic Pisinger types:
+%   Families (classic Pisinger types) rotate in the order of CORRELATION.families:
 %     uncorrelated            v ~ U(1, R)
-%     weakly_correlated       v = w + U(-R/10, R/10), at least 1
-%     strongly_correlated     v = w + R/10
+%     weakly_correlated       v = w + U(-k, k), at least 1,  k = floor(weak_noise_ratio * R)
+%     strongly_correlated     v = w + floor(strong_offset_ratio * R)
 %   Weights w ~ U(1, R); capacity = floor(capacity_ratio * sum(w)).
 %   The number of items grows linearly from MIN_ITEMS to MAX_ITEMS.
-
-  families = {'uncorrelated', 'weakly_correlated', 'strongly_correlated'};
+%   CORRELATION (block cfg.instances.correlation; default kb_config_instances().correlation):
+%   families (cell of distinct names), weak_noise_ratio, strong_offset_ratio (both in [0, 1]).
+%   Errors (identifier kb_generate_instances:correlation) on invalid correlation settings.
+  if nargin < 7
+    correlation = getfield(kb_config_instances(), 'correlation');
+  end
+  families = check_correlation(correlation);
+  weak = floor(correlation.weak_noise_ratio * R);
+  strong = floor(correlation.strong_offset_ratio * R);
   state = kb_seed(seed);
   instances = struct('id', {}, 'family', {}, 'weights', {}, 'values', {}, 'capacity', {});
 
@@ -24,10 +31,10 @@ function instances = kb_generate_instances(count, seed, min_items, max_items, R,
       case 'uncorrelated'
         [v, state] = kb_randi(state, 1, R, n);
       case 'weakly_correlated'
-        [noise, state] = kb_randi(state, -floor(R / 10), floor(R / 10), n);
+        [noise, state] = kb_randi(state, -weak, weak, n);
         v = max(w + noise, 1);
       otherwise
-        v = w + floor(R / 10);
+        v = w + strong;
     end
 
     instances(k).id = k;                 % global instance id (also inside a shard)
@@ -35,5 +42,25 @@ function instances = kb_generate_instances(count, seed, min_items, max_items, R,
     instances(k).weights = w;
     instances(k).values = v;
     instances(k).capacity = floor(capacity_ratio * sum(w));
+  end
+end
+
+function families = check_correlation(c)
+  known = {'uncorrelated', 'weakly_correlated', 'strongly_correlated'};
+  families = c.families;
+  if ischar(families)
+    families = {families};               % a one-element JSON array may decode as a string
+  end
+  families = families(:)';
+  if isempty(families) || ~iscellstr(families) || ~all(ismember(families, known)) ...
+     || numel(unique(families)) ~= numel(families)
+    error('kb_generate_instances:correlation', ...
+          'correlation.families: 1 to 3 distinct names among %s.', strjoin(known, ', '));
+  end
+  for f = {'weak_noise_ratio', 'strong_offset_ratio'}
+    r = c.(f{1});
+    if ~isnumeric(r) || ~isscalar(r) || ~(r >= 0 && r <= 1)
+      error('kb_generate_instances:correlation', 'correlation.%s must be in [0, 1].', f{1});
+    end
   end
 end

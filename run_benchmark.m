@@ -86,7 +86,7 @@ function result = run_benchmark(varargin)
   else
     ic = cfg.instances;
     instances = kb_generate_instances(ic.count, cfg.seed, ic.min_items, ic.max_items, ...
-                                      ic.max_coefficient, ic.capacity_ratio);
+                                      ic.max_coefficient, ic.capacity_ratio, ic.correlation);
     instance_config = cell2struct([{cfg.seed}; struct2cell(ic)], [{'seed'}; fieldnames(ic)]);
   end
 
